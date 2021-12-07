@@ -1,0 +1,24 @@
+# secrets and environments
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.httr-oauth
+.Renviron
+.DS_Store
+.Rdata
+
+# derived filetypes
+/**/*.png
+/**/*.pdf
+/**/*.xlsx
+/**/*.xls
+/**/*.doc
+/**/*.docx
+/**/*.rds
+/**/*.log
+/**/*.nc
+/**/*.html
+
+# documentation
+inst/doc
