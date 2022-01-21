@@ -5,3 +5,8 @@
 #' @importFrom tibble tibble
 ## usethis namespace: end
 NULL
+
+## usethis namespace: start
+#' @import shiny
+## usethis namespace: end
+NULL
