@@ -10,12 +10,15 @@ library(sf)
 # read dinocyst data
 dino_raw <- read_xlsx("data-raw/SurfaceDinos.xlsx") %>% janitor::clean_names()
 
-# relative counts
-dino_dat <- rowwise(dino_raw) %>%
+# relative counts in sample
+rel_dino <- rowwise(dino_raw) %>%
   mutate(sum = sum(c_across(-c(station,depth, weight, lycopodium ,lyc_tab, longitude, latitude)), na.rm = TRUE)) %>%
   ungroup() %>%
   mutate(across(-c(station,depth, weight, lycopodium ,lyc_tab, longitude, latitude), ~{./sum})) %>%
   select(-sum)
+
+# normalized variables
+norm_dino
 
 
 # parameters
