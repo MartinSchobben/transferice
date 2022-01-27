@@ -1,12 +1,6 @@
 model_app <- function() {
   
-  # names
-  params_lg <- grepl("_an$", colnames(complete_data))
-  meta <- c("station","depth","weight","lycopodium","lyc_tab", "geometry")
-  meta_lg <- colnames(complete_data) %in% meta
-  params <- colnames(complete_data)[params_lg]
-  species <- colnames(complete_data) [!params_lg & !meta_lg ]
-  
+
   ui <- fluidPage(
     
     # Application title
@@ -15,8 +9,7 @@ model_app <- function() {
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
       sidebarPanel(
-        selectInput("param", "Parameter", choices = params),
-        selectInput("transform", "Transform", choices = "raw")
+        selectInput("param", "Parameter", choices = params)
       ),
       
       # Show a plot of the generated distribution
@@ -31,23 +24,6 @@ model_app <- function() {
     
     output$plot <- renderPlot({
 
-      
-      ggplot2::ggplot(
-        long_data, 
-        ggplot2::aes(
-          x = .data$count,  
-          y = .data[[input$param]]
-        )
-      ) +
-        ggplot2::geom_point() +
-        ggplot2::geom_point(
-          data = long_data[which(long_data$species == input$species), , drop = FALSE],
-          mapping = ggplot2::aes(     
-            x = .data$count,  
-            y = .data[[input$param]]
-          ),
-          color= "red"
-        )
       
     })
   }

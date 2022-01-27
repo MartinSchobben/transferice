@@ -15,7 +15,11 @@ explo_app <- function() {
           mainPanel(
 
          
-              column(12, plotOutput("data", width = "100%"))
+              column(
+                12,
+                plotOutput("wmap", width = "100%"),
+                plotOutput("data", width = "100%")
+                )
             
           )
       )
@@ -25,7 +29,10 @@ explo_app <- function() {
   server <- function(input, output) {
   
       output$wmap <- renderPlot({
-    
+        oceanexplorer::plot_NOAA(
+          NOAA = filter_NOAA(get_NOAA(names(parms[parms == input$parm]) , 1, "annual"), dept = 30),
+          points = complete_data
+          )
       })
       output$data <- renderPlot({
         dim_reduction(as_tibble(complete_data), input$parm, dino)
