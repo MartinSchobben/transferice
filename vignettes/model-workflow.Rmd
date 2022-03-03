@@ -1,0 +1,274 @@
+---
+title: "Model workflow for transfer functions"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Model workflow for transfer functions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(transferice)
+```
+
+The model workflows follows the conventions and concepts as developed in the tidymodels metapackage.
+
+
+# Data
+
+For a starters we use all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
+
+```{r data}
+str(dinodat[1:10,1:15])
+```
+
+# Splitting data with re-sampling
+
+Guarding against model overfitting. 
+
+```{r splits}
+# install.packages("rsample")
+library(rsample)
+dinodat_split <- initial_split(dinodat, prop = 0.75) # how to startify
+
+# training
+dinodat_train <- training(dinodat_split)
+# testing
+dinodat_test <- testing(dinodat_split)
+```
+
+# Feature engineering with recipes
+
+```{r recipe}
+# install.packages("recipes")
+library(recipes)
+pms <- paste0(transferice:::abbreviate_vars(parms), "_an", collapse = "+")
+fml <- as.formula(paste0(pms, "~."))
+# formula for recipes
+dinodat_recipe <- recipe(fml, data = dinodat) |> 
+  # step_corr(all_outcomes(), threshold = 0.8) |> # remove highly correlated environmental parameters
+  # step_scale(all_outcomes()) |> # scale all responses
+  step_logit(all_predictors(), offset = 0.025) |>  # make dino count log odds
+  step_pca(all_predictors(), options = list(center =  TRUE)) # reduce multi-dimensionality
+```
+
+Prepare and apply to training set
+
+```{r preptrain}
+# seed for reproducibility
+set.seed(114393746)
+
+dinodat_train_prep <- prep(dinodat_recipe, training = dinodat_train) |> 
+  bake(new_data = NULL)
+```
+
+Prepare and apply to testing set
+
+```{r preptest}
+dinodat_test_prep <- prep(dinodat_recipe, training = dinodat_train) |> 
+  bake(new_data = dinodat_test)
+```
+
+
+# Model construction with parsnip
+
+```{r label, options}
+# install.packages("parsnip")
+library(parsnip)
+lm_model <- linear_reg() %>%  
+  set_engine('lm') %>%  
+  set_mode('regression')
+```
+
+
+# Fit model and test
+
+```{r fit}
+# need to rewerite formula as parsnip does not accept mutlivar
+sl_parms <- dinodat_test_prep |> select(-contains("PC")) |>  names() 
+sl_parms <- paste0(transferice:::abbreviate_vars(sl_parms), "_an")
+pms2 <- paste0(sl_parms, collapse = ",")
+fml2 <- as.formula(paste0("cbind(", pms2, ")~."))
+#fit
+lm_fit <- lm_model %>%   
+  fit(fml2,  data = dinodat_train_prep)
+
+ggpartial(lm_fit, PC1, t_an)
+```
+
+
+```{r predict}
+dinodat_predict <- predict(lm_fit, new_data = dinodat_test_prep)
+
+# bind test
+dinodat_test_prep <- rename_with(
+  dinodat_test_prep, 
+  .cols = any_of(sl_parms), 
+  .fn = ~paste0(".truth_", .x)
+)
+outcome <- bind_cols(dinodat_test_prep, dinodat_predict)
+```
+
+# Evaluate model with yardstick
+
+```{r metrics}
+# install.packages("yardstick")
+library(yardstick)
+# metrics
+rmsre(
+  outcome, 
+  truth =  rlang::inject(c(!!! rlang::syms(paste0(".truth_", sl_parms)))), 
+  estimate = rlang::inject(c(!!! rlang::syms(paste0(".pred_", sl_parms))))
+  )
+```
+
+visualize fit
+
+```{r viz}
+# install.packages("ggplot2")
+# install.packages("tune")
+library(ggplot2)
+library(tidyr)
+library(tune)
+long_outcome <- pivot_longer(
+  outcome,
+  cols = !c(PC1, PC2, PC3, PC4, PC5),
+  names_to = c(".value", "parameter"),
+  names_pattern = "(.*)_(._an)"
+)
+
+ggplot(long_outcome, aes(x = .truth, y = .pred)) +  
+  geom_point() +  
+  geom_abline(color = 'blue', linetype = 2) +  
+  # coord_fixed() +  
+  facet_wrap(vars(parameter), scales = "free") +
+  labs(
+    title = 'R-Squared Plot',       
+    y = 'Predicted',        
+    x = 'Actual'
+  )
+```
+
+# Compact format with workflows and automated testing
+
+```{r workflows}
+# install.packages("workflows")
+library(workflows)
+lm_wfl <- workflow() |> 
+  add_recipe(dinodat_recipe) |> 
+  add_model(lm_model)
+
+outcome <- last_fit(lm_wfl, split = dinodat_split, metrics = metric_set(rmsre, rmse))
+collect_metrics(outcome)
+```
+
+# Tuning the model with cross validation
+
+Now we want to know what actually would be the optimal selection of components from the PCA.
+
+```{r tune}
+# install.packages("dials")
+library(dials)
+dinodat_recipe_tune <- recipe(fml, data = dinodat) |> 
+  step_logit(all_predictors(), offset = 0.025) |> 
+  # step_scale(all_outcomes()) |> 
+  step_pca(all_predictors(), num_comp = tune(), options = list(center =  TRUE))
+
+# update workflow
+(lm_tune_wfl <- update_recipe(lm_wfl, dinodat_recipe_tune))
+```
+
+cross validation
+
+```{r cv}
+# seed for reproducibility
+set.seed(410174750)
+
+dinodat_cv <- vfold_cv(dinodat_train, v = 10)
+```
+
+grid searh
+
+```{r grid, cache=TRUE}
+# update dial  (original is only 4 comps) (take 20)
+library(hardhat)
+lm_tune_parms <- lm_tune_wfl |>
+  parameters() |>
+  update(num_comp = num_comp(c(1, 9)))
+
+lm_tune_parms|> hardhat::extract_parameter_dials("num_comp")
+
+lm_grid <- grid_regular(lm_tune_parms, levels = 9)
+
+# seed for reproducibility
+set.seed(949004590)
+
+dinodat_tuned <- tune_grid(
+  lm_tune_wfl, 
+  resamples = dinodat_cv, 
+  grid = lm_grid, 
+  metrics = metric_set(rmsre), 
+  control = control_resamples(extract = function(x) extract_fit_parsnip(x))
+  )
+```
+
+get the metrics
+
+```{r iterate}
+collect_metrics(dinodat_tuned)
+collect_metrics(dinodat_tuned, summarize = FALSE) |> filter(.estimate < 100) |> 
+  ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
+  geom_boxplot()
+```
+
+
+# Partial regression plots
+
+```{r partial}
+mdl <- tuned_partials(dinodat_tuned, "Fold01", num_comp, 1) 
+ggpartial(mdl, PC1, t_an)
+```
+
+
+
+
+# Finalize
+
+```{r final}
+# select best
+lm_final_wfl <- finalize_workflow(lm_tune_wfl, tibble(num_comp = 3, .config = "Preprocessor03_Model1"))
+final_outcome <- last_fit(lm_final_wfl, split = dinodat_split, metrics = metric_set(rmsre, rmse, rsq))
+final_outcome |> collect_metrics()
+
+final_fit <- rename_with(
+  collect_predictions(final_outcome), 
+  .cols = any_of(sl_parms), 
+  .fn = ~paste0(".truth_", .x)
+)
+
+long_final <- pivot_longer(
+  final_fit,
+  cols = ends_with("_an"),
+  names_to = c(".value", "parameter"),
+  names_pattern = "(.*)_(._an)"
+)
+
+ggplot(long_final, aes(x = .truth, y = .pred)) +  
+  geom_point() +  
+  geom_abline(color = 'blue', linetype = 2) +  
+  # coord_fixed() +  
+  facet_wrap(vars(parameter), scales = "free") +
+  labs(
+    title = 'R-Squared Plot',       
+    y = 'Predicted',        
+    x = 'Actual'
+  )
+```
+
