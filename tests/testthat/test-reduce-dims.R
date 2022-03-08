@@ -16,6 +16,12 @@ test_that("dimensions ca be reduced", {
       FROM neptune_hole_summary l 
         LEFT JOIN neptune_sample s ON l.hole_id = s.hole_id"
     )
+  
+  dino_prep <- recipes::recipe(dino_prop) |> 
+    recipes::step_logit(offset = 0.025) |> 
+    recipes::prep() |> 
+    recipes::bake(new_data = NULL)
+  
   environ <- oceanexplorer::get_NOAA( "temperature", 1, "annual")
   crd <- locs[, !names(locs) %in%  c("hole_id", "site", "sample_id"), drop = FALSE]
   # cast location as list before extraction
@@ -27,7 +33,7 @@ test_that("dimensions ca be reduced", {
   # apply function and compare to reference plot
   vdiffr::expect_doppelganger(
     "pca plot of taxon overlain with environmental parameter",
-    reduce_dims(dino_prop, environ_dat, var = "t_an", 
+    reduce_dims(dino_prep, environ_dat, var = "t_an", 
                 id = c("sample_id", "hole_id"), loc = "hole_id")
   )
   on.exit(DBI::dbDisconnect(con))  

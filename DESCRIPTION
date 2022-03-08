@@ -15,6 +15,7 @@ Imports:
     dplyr,
     ggplot2,
     parsnip,
+    pool (>= 0.1.6),
     recipes (>= 0.2.0),
     rlang (>= 0.4.11),
     rsample,
@@ -29,10 +30,12 @@ Suggests:
     knitr,
     roxygen2,
     testthat (>= 3.0.0),
-    vdiffr
+    vdiffr,
+    thematic (>= 0.1.2.1),
+    RSQLite (>= 2.2.10)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Depends: 
     R (>= 2.10)
+Remotes: UtrechtUniversity/oceanexplorer
 LazyData: true
-

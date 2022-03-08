@@ -25,7 +25,11 @@ explo_ui <- function(id) {
       # show a plot of the selected sites 
       column(
         width = 6, 
-        selectInput(NS(id, "parm"), h3("Parameter selection"), choices = parms),
+        selectInput(
+          NS(id, "parm"), 
+          h3("Parameter selection"), 
+          choices = abbreviate_vars(parms)
+        ),
         tabsetPanel(
           id ="explore",
           tabPanel("worldmap", plotOutput(NS(id, "wmap"))),
@@ -79,7 +83,11 @@ explo_server <- function(id) {
     })
     
     environ_dat <- reactive({
-      oceanexplorer::get_NOAA(names(parms[parms == input$parm]), 1, "annual")
+      oceanexplorer::get_NOAA(
+        parms[abbreviate_vars(parms) == input$parm], 
+        1, 
+        "annual"
+      )
     })
     
     coords <- reactive({
@@ -99,51 +107,55 @@ explo_server <- function(id) {
         limit = limit()
       ) 
     })
-    
+  
     # get environmental variable from sample location
     environ_pts <- reactive({
       # cast location as list before extraction
       pts <- setNames(as.list(coords()), nm = c("lon", "lat"))
       pts <- oceanexplorer::filter_NOAA(environ_dat(), depth = 30, coord = pts)
       # drop geometry as we will use it for ...
-      parm <- sf::st_drop_geometry(pts) 
-      dplyr::bind_cols(locs(), parm) 
+      parm <- sf::st_drop_geometry(pts)
+      dplyr::bind_cols(locs(), parm)
     })
-    
+
     # proportional taxon data
-    dino_prop <- reactive({
-      dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", pool) 
+    taxon_prop <- reactive({
+      taxon_prop <- calc_taxon_prop(
+        "neptune_sample_taxa", 
+        "neptune_sample", 
+        pool
+        )
       # filter to available stations (linked to region selection)
-      dplyr::filter(dino_prop, .data$hole_id%in% locs()$hole_id)
+      dplyr::filter(taxon_prop, .data$hole_id %in% locs()$hole_id)
     })
-    
-    # plot taxon 
+
+    # plot taxon
     output$spc <- renderPlot({
       taxon_plot(
-        dino_prop(),
+        taxon_prop(),
         input$taxa,
-        nm = names(species_naming(pool))[species_naming(pool) == input$taxa],
         "sample_id"
       )
     })
-  
+
+    
     # reduce dimensions
     output$pcr <- renderPlot({
       selected_var <- paste(
-        parms[parms == input$parm], # variable
+        input$parm, # variable
         temp[temp == input$temp], # temporal averaging
         sep = "_"
         )
-      # rescale (logit from cars)
-      dino_prep <- dplyr::mutate(
-        dino_prop(), 
-        dplyr::across(-c(sample_id , hole_id), rescale)
-        )
+      # rescale (logit from recipes)
+      taxon_prep <- recipes::recipe(taxon_prop()) |>
+        recipes::step_logit(-c(sample_id, hole_id), offset = 0.025) |>
+        recipes::prep() |>
+        recipes::bake(new_data = NULL)
       # perform a pcr
       reduce_dims(
-        dino_prep, 
-        environ_pts(), 
-        var = selected_var, 
+        taxon_prep,
+        environ_pts(),
+        var = selected_var,
         id = c("sample_id", "hole_id"),
         loc = "hole_id",
         component_x = input$x,

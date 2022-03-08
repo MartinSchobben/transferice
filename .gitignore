@@ -19,6 +19,7 @@
 /**/*.log
 /**/*.nc
 /**/*.html
+/**/*.svg
 
 # documentation
 inst/doc
