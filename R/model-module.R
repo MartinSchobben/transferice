@@ -40,7 +40,13 @@ model_ui <- function(id) {
               step = 1, 
               animate = animationOptions(interval = 800, loop = TRUE)
               ),
-            selectInput(NS(id, "comp"), "Components", choices =  1:9),
+            selectInput(NS(id, "ncomp"), "Number of components", choices =  1:9),
+            selectInput(NS(id, "comp"), "Selected component", choices =  1:9),
+            selectInput(
+              NS(id, "parm"), 
+              "Parameter selection", 
+              choices = abbreviate_vars(parms)
+            ),
             #textOutput(NS(id, "table"))
             plotOutput(NS(id, "part"))
           ),
@@ -90,8 +96,7 @@ model_server <- function(id) {
 
     part <- reactive({
       # extract model data per fold
-      cv_model_extraction(tun())
-      
+      cv_model_extraction_mem(tun())
     })
       
     # the different CV parts
@@ -104,15 +109,19 @@ model_server <- function(id) {
       # this keeps environmental variable axis limits equal for different folds
       rng <- dplyr::select(dat(), dplyr::any_of(vars))
       # plot the different folds
-      flt <- part() |> 
-        dplyr::filter(id == sprintf("Fold%02d", input$fold), num_comp == input$comp)  
-      
-      org <- tidyr::unnest(flt, cols = c(.data$.input)) |> 
-        dplyr::mutate(dplyr::across(-c(t_an, PC1), mean , na.rm = TRUE))
-      fit <- tidyr::unnest(flt, cols = c(.data$.extracts)) |>  predict(org)
-
-      ggpartial(rng, PC1, t_an)
+      part <- part() |> 
+        dplyr::filter(
+          id == sprintf("Fold%02d", input$fold), 
+          num_comp == input$ncomp
+          )  
+      sprm <- paste(
+        input$parm, # variable
+        temp[temp == input$temp], # temporal averaging
+        sep = "_"
+      )
+      ggpartial(part$.input[[1]], part$.output[[1]], rng, !!rlang::sym(paste0("PC", input$comp)), !!rlang::sym(sprm))
     })
+    
   })
 }
 
