@@ -8,24 +8,36 @@
 #'
 #' @return
 #' @export
-ggpartial <-  function(model, x, y) {
+ggpartial <-  function(dat, model, tot_rng, x, y) {
   x <- enquo(x)
   y <- enquo(y)
-  partial <- dplyr::bind_cols(model$fit$model[[1]], model$fit$model[,-1, drop = FALSE]) |>
-    dplyr::mutate(dplyr::across(-c(!!x, !!y), mean, na.rm = TRUE)) 
+
+  rng <- dplyr::summarise(tot_rng, dplyr::across(dplyr::everything(), range)) |> 
+    dplyr::mutate(!!x := c(-8, 8)) # PCA set to this range
   
-  dplyr::bind_cols(partial, predict(model, partial)) |> 
-    ggplot2::ggplot(ggplot2::aes(x = !!x, y = !!y)) +
+  ggplot2::ggplot(model, ggplot2::aes(x = !!x, y = !!y)) +
+    # use a geom_blank to set the min to max ranges of the axis to a fixed value
+    ggplot2::geom_blank(data = rng, mapping = ggplot2::aes(x = !!x, y = !!y)) +
     ggplot2::geom_point() +
     ggplot2::geom_line(
-      aes(y = !!rlang::sym(paste0(".pred_",  rlang::as_name(y)))),
+      data = model, 
+      mapping = ggplot2::aes(y = !!rlang::sym(paste0(".pred_",  rlang::as_name(y)))),
       linetype = 2,
       color = "blue"
     )
 }
 
-tuned_partials <- function(tuned_cv, fold, tune_parm, tune_val) {
-  l1 <- tuned_cv |> dplyr::filter(id == fold) |> dplyr::pull(.extracts) 
-  l2 <- l1[[1]] |> dplyr::filter(num_comp == tune_val) |> dplyr::pull(.extracts)
-  l2[[1]]
+cv_model_extraction <- function(tuned_cv) {
+  dplyr::select(tuned_cv, .data$id, .data$.extracts) |> 
+    tidyr::unnest(cols = c(.data$.extracts)) |>
+    dplyr::select(-.data$.config) |> 
+    dplyr::mutate(.input = purrr::map(.data$.extracts, ~calc_partials(.x))) 
 }
+
+calc_partials <- function(fold) {
+  dplyr::bind_cols(
+    fold$fit$model[[1]], 
+    fold$fit$model[,-1, drop = FALSE]
+  )  
+}
+

@@ -14,6 +14,7 @@ Imports:
     dials,
     dplyr,
     ggplot2,
+    memoise,
     parsnip,
     pool (>= 0.1.6),
     recipes (>= 0.2.0),

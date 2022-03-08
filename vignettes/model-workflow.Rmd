@@ -100,6 +100,7 @@ fml2 <- as.formula(paste0("cbind(", pms2, ")~."))
 lm_fit <- lm_model %>%   
   fit(fml2,  data = dinodat_train_prep)
 
+# partial regresions
 ggpartial(lm_fit, PC1, t_an)
 ```
 
@@ -232,8 +233,8 @@ collect_metrics(dinodat_tuned, summarize = FALSE) |> filter(.estimate < 100) |>
 # Partial regression plots
 
 ```{r partial}
-mdl <- tuned_partials(dinodat_tuned, "Fold01", num_comp, 1) 
-ggpartial(mdl, PC1, t_an)
+mdl <- tuned_partials(dinodat_tuned, "Fold01", num_comp, 2) 
+ggpartial(mdl, PC2, p_an)
 ```
 
 
