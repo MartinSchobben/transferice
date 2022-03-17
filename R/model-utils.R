@@ -1,9 +1,13 @@
 transferice_recipe <- function(dat, tunable = TRUE) {
 
-  # parameters
+  # parameter names
   pms <- paste0(abbreviate_vars(parms), "_an", collapse = "+")
+  # dinocysts ids
+  rm <- c(paste0(abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
+  dns <- paste0(paste0("`", names(dat)[!names(dinodat) %in% rm], "`"), collapse = "+")
+ 
   # formula
-  fml <- as.formula(paste0(pms, "~ ."))
+  fml <- as.formula(paste0(pms, "~", dns))
   # recipe
   rcp <- recipes::recipe(fml, data = dat)
   

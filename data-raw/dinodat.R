@@ -1,4 +1,6 @@
-# dinocysts
+# ------------------------------------------------------------------------------
+# SQL queries
+# ------------------------------------------------------------------------------
 dbpath <- fs::path_package(package = "transferice", "extdata", 
                            "transferice.sqlite")
 con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
@@ -11,49 +13,55 @@ locs <- DBI::dbGetQuery(
       LEFT JOIN neptune_sample s ON l.hole_id = s.hole_id"
 )
 
-# # scale variance of dinocyst data
-# dino_prep <- dplyr::mutate(
-#   dino_prop, 
-#   dplyr::across(-c(sample_id , hole_id), rescale)
-# )
-
+# ------------------------------------------------------------------------------
+# environmental parameters
+# ------------------------------------------------------------------------------
 parms <- c("temperature", "phosphate", "nitrate", "silicate", "oxygen", 
-            "salinity", "density")
+           "salinity", "density")
 
+# save parameter names
 usethis::use_data(parms, overwrite = TRUE)
 
 # get NOAA annually averaged data for parameters on a 1 degree grid 
-ls_data <- purrr::map(params, ~oceanexplorer::get_NOAA(.x, 1, "annual"))
-
+ls_data <- purrr::map(parms, ~oceanexplorer::get_NOAA(.x, 1, "annual"))
 
 crd <- locs[, !names(locs) %in%  c("hole_id", "site", "sample_id"), drop = FALSE]
 # cast location as list before extraction
 pts <- setNames(as.list(crd), nm = c("lon", "lat"))
 
 # get locations parameters
-ls_params <- purrr::map(ls_data, ~oceanexplorer::filter_NOAA(.x, depth = 30,  coord = pts))
+ls_parms <- purrr::map(
+  ls_data, 
+  ~oceanexplorer::filter_NOAA(.x, depth = 30,  coord = pts)
+  )
 
 # make normal tibble
-reduce_sf <- function(params) {
+reduce_sf <- function(parms) {
   
   # remove depth
-  purrr::map(params, ~dplyr::select(.x, -.data$depth)) |> 
+  purrr::map(parms, ~dplyr::select(.x, -.data$depth)) |> 
     # drop geometry as we will use it for ...
     purrr::map(~sf::st_drop_geometry(.x)) |> 
     dplyr::bind_cols()
 }
 
-environ_dat <- dplyr::bind_cols(locs, reduce_sf(ls_params)) |> 
-  dplyr::select(-c(.data$site, .data$longitude, .data$latitude))
+environ_dat <- dplyr::bind_cols(locs, reduce_sf(ls_parms)) |> 
+  dplyr::select(-c(.data$site))
 
+# ------------------------------------------------------------------------------
+# dinocysts
+# ------------------------------------------------------------------------------
 # combine
-dinodat <- dplyr::left_join(environ_dat, dino_prop, by = c("hole_id", "sample_id")) |> 
-  dplyr::select(-.data$hole_id, -.data$sample_id) |> 
+dinodat <- dplyr::left_join(
+  environ_dat, 
+  dino_prop, 
+  by = c("hole_id", "sample_id")
+  ) |> 
+  # remove NAs
   tidyr::drop_na() 
   
-# response  <- as.matrix(dplyr::select(dinodat, dplyr::any_of(paste(abbreviate_vars(parms), "an", sep = "_"))))
-# predictor  <- as.matrix(dplyr::select(dinodat, -dplyr::any_of(paste(abbreviate_vars(parms), "an", sep = "_"))))
-# 
-# dinodat <- data.frame(response = I(response), predictor = I(predictor ))
-  
+# save data
 usethis::use_data(dinodat, overwrite = TRUE)
+
+# disconnect SQL
+DBI::dbDisconnect(con)

@@ -10,22 +10,24 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports: 
-    car,
-    dials,
-    dplyr,
-    ggplot2,
-    memoise,
-    parsnip,
+    dials (>= 0.1.0),
+    dplyr (>= 1.0.8),
+    gganimate,
+    ggplot2 (>= 3.3.5),
+    gstat (>= 2.0.8),
+    memoise (>= 2.0.1),
+    parsnip (>= 0.2.0.9000),
     pool (>= 0.1.6),
+    purrr (>= 0.3.4),
     recipes (>= 0.2.0),
     rlang (>= 0.4.11),
-    rsample,
-    sf,
-    shiny,
-    tibble,
-    tidyr,
+    rsample (>= 0.1.1),
+    sf (>= 1.0.7),
+    shiny (>= 1.7.1),
+    tibble (>= 3.1.6),
+    tidyr (>= 1.2.0),
     tune,
-    yardstick
+    yardstick (>= 0.0.9)
 Suggests: 
     rmarkdown,
     knitr,
@@ -39,4 +41,5 @@ VignetteBuilder: knitr
 Depends: 
     R (>= 2.10)
 Remotes: UtrechtUniversity/oceanexplorer
+StagedInstall: no
 LazyData: true

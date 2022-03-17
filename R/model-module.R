@@ -31,24 +31,19 @@ model_ui <- function(id) {
           id = NS(id, "specs"),
           tabPanel(
             "tuning",
-            sliderInput(
-              NS(id, "fold"), 
-              "CV folds", 
-              min = 1, 
-              max = 10, 
-              value = 1, 
-              step = 1, 
-              animate = animationOptions(interval = 800, loop = TRUE)
-              ),
-            selectInput(NS(id, "ncomp"), "Number of components", choices =  1:9),
-            selectInput(NS(id, "comp"), "Selected component", choices =  1:9),
-            selectInput(
-              NS(id, "parm"), 
-              "Parameter selection", 
-              choices = abbreviate_vars(parms)
+            fixedRow(
+              selectInput(NS(id, "comp"), "Components", choices =  1:9),
+              selectInput(
+                NS(id, "parm"), 
+                "Parameter selection", 
+                choices = abbreviate_vars(parms)
+              )
             ),
-            #textOutput(NS(id, "table"))
-            plotOutput(NS(id, "part"))
+
+            fluidRow(
+              column(4, imageOutput(NS(id, "rpart"))),
+              column(5, imageOutput(NS(id, "spart")))
+            )
           ),
           tabPanel(
             "validation"
@@ -94,35 +89,47 @@ model_server <- function(id) {
       transferice_tuning_mem(splt, rcp, mdl)
     })
 
-    part <- reactive({
+    mdls <- reactive({
       # extract model data per fold
       cv_model_extraction_mem(tun())
     })
-      
-    # the different CV parts
-    output$part <- renderPlot({
-      vars <- paste(
-        abbreviate_vars(parms), # variable
-        temp[temp == input$temp], # temporal averaging
-        sep = "_"
-      )
-      # this keeps environmental variable axis limits equal for different folds
-      rng <- dplyr::select(dat(), dplyr::any_of(vars))
-      # plot the different folds
-      part <- part() |> 
-        dplyr::filter(
-          id == sprintf("Fold%02d", input$fold), 
-          num_comp == input$ncomp
-          )  
-      sprm <- paste(
-        input$parm, # variable
-        temp[temp == input$temp], # temporal averaging
-        sep = "_"
-      )
-      ggpartial(part$.input[[1]], part$.output[[1]], rng, !!rlang::sym(paste0("PC", input$comp)), !!rlang::sym(sprm))
-    })
     
+    # the different CV parts (regression)
+    output$rpart <- renderImage({
+      # regression folds
+      filename <- ggpartial(
+        partials = xc,
+        tune = input$comp,
+        pred = !!rlang::sym(paste(input$parm, temp[temp == input$temp], sep = "_")),
+        type = "regression"
+      )
+      # Return a list containing the filename
+      list(src = filename)
+    },
+    deleteFile = FALSE
+    )
+    
+    # the different CV parts (spatial)
+    output$spart <- renderImage({
+      # spatial folds
+      # base map projection (replace later on)
+      base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |>
+        oceanexplorer::filter_NOAA(depth = 0) |>
+        stars::st_warp(crs = 4326) |> 
+        stars::st_downsample(n = 5)
+      filename <- ggpartial(
+        partials = xc,
+        tune = input$comp,
+        pred = !!rlang::sym(paste(input$parm, temp[temp == input$temp], sep = "_")),
+        type = "spatial",
+        base_map = base
+      )
+      # Return a list containing the filename
+      list(src = filename)
+    },
+    deleteFile = FALSE
+    )
+
+
   })
 }
-
-

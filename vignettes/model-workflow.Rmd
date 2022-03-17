@@ -20,7 +20,6 @@ library(transferice)
 
 The model workflows follows the conventions and concepts as developed in the tidymodels metapackage.
 
-
 # Data
 
 For a starters we use all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
@@ -36,7 +35,7 @@ Guarding against model overfitting.
 ```{r splits}
 # install.packages("rsample")
 library(rsample)
-dinodat_split <- initial_split(dinodat, prop = 0.75) # how to startify
+dinodat_split <- initial_split(dinodat, prop = 0.75) # how to stratify
 
 # training
 dinodat_train <- training(dinodat_split)
@@ -49,14 +48,18 @@ dinodat_test <- testing(dinodat_split)
 ```{r recipe}
 # install.packages("recipes")
 library(recipes)
+# parameter names
 pms <- paste0(transferice:::abbreviate_vars(parms), "_an", collapse = "+")
-fml <- as.formula(paste0(pms, "~."))
+# dinocysts ids
+rm <- c(paste0(transferice:::abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
+dns <- paste0(paste0("`", names(dinodat)[!names(dinodat) %in% rm], "`"), collapse = "+")
+fml <- as.formula(paste0(pms, "~", dns))
 # formula for recipes
 dinodat_recipe <- recipe(fml, data = dinodat) |> 
-  # step_corr(all_outcomes(), threshold = 0.8) |> # remove highly correlated environmental parameters
-  # step_scale(all_outcomes()) |> # scale all responses
-  step_logit(all_predictors(), offset = 0.025) |>  # make dino count log odds
-  step_pca(all_predictors(), options = list(center =  TRUE)) # reduce multi-dimensionality
+  # make dino count log odds
+  step_logit(all_predictors(), offset = 0.025) |>  
+  # reduce multi-dimensionality
+  step_pca(all_predictors(), options = list(center =  TRUE)) 
 ```
 
 Prepare and apply to training set
@@ -99,9 +102,6 @@ fml2 <- as.formula(paste0("cbind(", pms2, ")~."))
 #fit
 lm_fit <- lm_model %>%   
   fit(fml2,  data = dinodat_train_prep)
-
-# partial regresions
-ggpartial(lm_fit, PC1, t_an)
 ```
 
 
@@ -195,7 +195,7 @@ set.seed(410174750)
 dinodat_cv <- vfold_cv(dinodat_train, v = 10)
 ```
 
-grid searh
+grid search
 
 ```{r grid, cache=TRUE}
 # update dial  (original is only 4 comps) (take 20)
@@ -232,15 +232,66 @@ collect_metrics(dinodat_tuned, summarize = FALSE) |> filter(.estimate < 100) |>
 
 # Partial regression plots
 
+
 ```{r partial}
-mdl <- tuned_partials(dinodat_tuned, "Fold01", num_comp, 2) 
-ggpartial(mdl, PC2, p_an)
+mdl_extracts <- cv_model_extraction(dinodat_tuned) 
+ggpartial(mdl_extracts, "Fold01", 2, p_an)
 ```
 
 
 
 
+# IDW and Ordinary Kriging 
+
+Make raster  of area of interest
+ 
+```{r interpolat}
+# filter for the fold and tune
+partials <- dplyr::filter(mdl_extracts, id == "Fold01", num_comp == 1) |> 
+  purrr::flatten()
+
+output <- calc_partials(partials$.extracts, partials$.input, PC1, t_an)
+  
+xc <- bind_cols(partials$splits |> as_tibble(), output) |> 
+  select(longitude, latitude, .pred_t_an)
+  
+# library(gstat)
+library(sf)
+
+prm <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
+  oceanexplorer::filter_NOAA(depth = 30) |> 
+  st_warp(crs = 4326)
+
+# # make coordinate sf object
+# crds <- st_as_sf(xc, coords = c("longitude", "latitude"), crs =  4326)
+# 
+# g <- gstat(formula = .pred_t_an ~ 1, data = crds)
+# z <- predict(g, prm |> select(-t_an))
+# z = z["var1.pred",,]
+# names(z) = "t_an"
+
+```
+
+
+```{r lkrig}
+
+# variogram(.pred_t_an ~ 1, data = crds) |> plot()
+# # fit
+# library(automap)
+# var_fit <- autofitVariogram(.pred_t_an ~ 1, as(crds, "Spatial")) 
+# plot(var_fit)
+# g <- gstat(formula = .pred_t_an ~ 1, model = var_fit$var_model, data = crds)
+# z <- predict(g, prm |> select(-t_an))
+# z = z["var1.pred",,]
+# names(z) = "t_an"
+
+oceanexplorer::plot_NOAA(z)
+```
+
+
+
 # Finalize
+
 
 ```{r final}
 # select best
@@ -272,4 +323,3 @@ ggplot(long_final, aes(x = .truth, y = .pred)) +
     x = 'Actual'
   )
 ```
-
