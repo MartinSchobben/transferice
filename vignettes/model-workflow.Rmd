@@ -95,7 +95,9 @@ lm_model <- linear_reg() %>%
 
 ```{r fit}
 # need to rewerite formula as parsnip does not accept mutlivar
-sl_parms <- dinodat_test_prep |> select(-contains("PC")) |>  names() 
+sl_parms <- dinodat_test_prep |> 
+  select(-contains("PC")) |>  
+  names() 
 sl_parms <- paste0(transferice:::abbreviate_vars(sl_parms), "_an")
 pms2 <- paste0(sl_parms, collapse = ",")
 fml2 <- as.formula(paste0("cbind(", pms2, ")~."))
@@ -155,6 +157,49 @@ ggplot(long_outcome, aes(x = .truth, y = .pred)) +
     y = 'Predicted',        
     x = 'Actual'
   )
+```
+
+How does this look like in a spatial sense?
+
+```{r spatpat}
+library(sf)
+library(tibble)
+library(gstat)
+# make coordinate sf object
+tot <- add_column(
+  outcome, 
+  longitude = dinodat_test$longitude, 
+  latitude = dinodat_test$latitude
+)
+crds <- st_as_sf(tot, coords = c("longitude", "latitude"), crs =  4326)
+
+# get nicely spread POINT with no duplication within tolerance limit
+d = st_is_within_distance(crds, dist = 2500)
+dupl = unlist(mapply(function(x,y) x[x < y], d, seq_along(d)))
+crds <- crds[-dupl, ]
+
+# variogram (exploration)
+v <- variogram(.pred_t_an ~ .truth_t_an, crds) 
+plot(v)
+# variogram (modelling)
+# mean variance
+mean_var <- yardstick::rmse(tot, .truth_t_an, .pred_t_an)$.estimate 
+vario_model <- fit.variogram(v, vgm(var(tot$.pred_t_an), "Sph", 700, mean_var)) 
+
+plot(v, vario_model)
+
+g <- gstat(formula = .pred_t_an ~ .truth_t_an, data = crds, model = vario_model)
+
+base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
+  oceanexplorer::filter_NOAA(depth = 0) |> 
+  stars::st_warp(crs = 4326) |>  
+  rename(.truth_t_an = "t_an")
+
+z <- predict(g, base)
+
+z = z["var1.pred",,]
+names(z) = "t_an"
+oceanexplorer::plot_NOAA(z, points = crds)
 ```
 
 # Compact format with workflows and automated testing

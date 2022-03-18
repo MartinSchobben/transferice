@@ -55,5 +55,4 @@ rescale <- function(var, fun = "logit", ns = "car") {
   }
   rlang::call2(fun, var, .ns = ns) |> eval()
 }
-  
 

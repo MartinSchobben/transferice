@@ -10,45 +10,61 @@ model_ui <- function(id) {
     titlePanel("Training transfer functions"),
     
     # Parameter and statistic selection
-    sidebarLayout(
-      sidebarPanel(
-        tabsetPanel(
-          id = NS(id, "school"),
-          tabPanel("frequentist"),
-          tabPanel("bayesian"),
-          footer = tagList(
-            h3("Site selection"),
-            selectInput(NS(id, "area"), "Region", choices = geo),
-            selectInput(NS(id, "temp"), "Averaging", choices = temp[1]),
-            actionButton(NS(id, "model"), "Run model")
+    fluidRow(
+      column(
+        width = 3,
+        wellPanel(
+          tabsetPanel(
+            id = NS(id, "school"),
+            tabPanel(
+              "frequentist",
+              selectInput(NS(id, "model"), "Model type", choices = temp[1]),
+            ),
+            tabPanel("bayesian"),
+            header = selectInput(NS(id, "feature"), "Feature selection", choices = geo),
+            footer = actionButton(NS(id, "run"), "Run model")
           )
         )
       ),
       
       # Show a plot of the model outcome and evaluation
-      mainPanel(
-        tabsetPanel(
-          id = NS(id, "specs"),
-          tabPanel(
-            "tuning",
-            fixedRow(
-              selectInput(NS(id, "comp"), "Components", choices =  1:9),
+      column(
+        width = 6, 
+          tabsetPanel(
+            id = NS(id, "specs"),
+            tabPanel(
+              "tuning",
+              tags$br(),
               selectInput(
                 NS(id, "parm"), 
                 "Parameter selection", 
                 choices = abbreviate_vars(parms)
+              ),
+              shinyWidgets::materialSwitch(
+                NS(id, "toggle"), 
+                "project on map"
+              ),
+              conditionalPanel(
+                condition = "input.toggle==false",
+                imageOutput(NS(id, "rpart")),
+                ns = NS(id)
+              ),
+              conditionalPanel(
+                condition = "input.toggle==true",
+                imageOutput(NS(id, "spart")),
+                ns = NS(id)
               )
             ),
-
-            fluidRow(
-              column(4, imageOutput(NS(id, "rpart"))),
-              column(5, imageOutput(NS(id, "spart")))
+            tabPanel(
+              "validation"
             )
-          ),
-          tabPanel(
-            "validation"
-            
-          )
+         )
+      ),
+
+      column(
+        width = 3,
+        wellPanel(
+          selectInput(NS(id, "comp"), "Components", choices =  1:9)
         )
       )
     )
@@ -74,7 +90,7 @@ model_server <- function(id) {
       dinodat
     })
     
-    tun <- eventReactive(input$model, {
+    tun <- eventReactive(input$run, {
       set.seed(1)
       # resample
       splt <- rsample::initial_split(dat(), prop = 0.75) 
@@ -100,7 +116,7 @@ model_server <- function(id) {
       filename <- ggpartial(
         partials = xc,
         tune = input$comp,
-        pred = !!rlang::sym(paste(input$parm, temp[temp == input$temp], sep = "_")),
+        pred = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
         type = "regression"
       )
       # Return a list containing the filename
@@ -120,7 +136,7 @@ model_server <- function(id) {
       filename <- ggpartial(
         partials = xc,
         tune = input$comp,
-        pred = !!rlang::sym(paste(input$parm, temp[temp == input$temp], sep = "_")),
+        pred = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
         type = "spatial",
         base_map = base
       )

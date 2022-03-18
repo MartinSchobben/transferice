@@ -10,6 +10,7 @@
 #' @export
 ggpartial <- function(partials, tune, pred, type = "regression", 
                        base_map = NULL) {
+  
   x <- rlang::sym(paste0("PC", tune))
   y <- rlang::enquo(pred) 
   
@@ -19,16 +20,26 @@ ggpartial <- function(partials, tune, pred, type = "regression",
   # predicted values
   output <- transmute(
     tpart, 
-    id = id,
-    .output = purrr::map2(.extracts, .input, ~calc_partials(.x, .y, !!x, !!y))
-    ) 
+    id = .data$id,
+    .output = purrr::map2(
+      .data$.extracts, 
+      .data$.input, 
+      ~calc_partials(.x, .y, !!x, !!y)
+    )
+  ) 
+  
+  # plot y-axis label for the predicted values
+  lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
   
   # name file and potential path
   nm <- paste("folds", type, rlang::as_name(y), rlang::as_name(x), sep = "_")
-  gif_path <- try(fs::path_package("transferice", "anims", nm, ext = "gif"), silent = TRUE)
+  gif_path <- try(
+    fs::path_package("transferice", "anims", nm, ext = "gif"), 
+    silent = TRUE
+  )
   
   # if the file does not exit then render from scratch
-  if (!inherits(gif_path, "fs_path")) {
+  if (inherits(gif_path, "try-error")) {
 
     if (type == "spatial") {
       # original data
@@ -36,56 +47,77 @@ ggpartial <- function(partials, tune, pred, type = "regression",
   
       # spatial interpolation for each fold
       z <- dplyr::bind_cols(origin, output) |> 
-        dplyr::mutate(z = 
-          purrr::map2(
-            .data$origin, 
-            .data$.output, 
-            ~interpolate_model(.x, .y, y = !!y, base_map = base_map)
+        dplyr::mutate(
+          z = 
+            purrr::map2(
+              .data$origin, 
+              .data$.output, 
+              ~interpolate_model(.x, .y, y = !!y, base_map = base_map)
             )
-          )
+        )
   
       # calculate differences
-      diff <- lapply(z$z, function(x) base_map - x)
-      st <- rlang::inject(c(!!!diff, nms = z$id)) # combine and rename
+      # diff <- lapply(z$z, function(x) base_map - x)
+      st <- rlang::inject(c(!!!z$z, nms = z$id)) # combine and rename
       st = merge(st) # collapse to dimension
       names(st) = rlang::as_name(y) # rename
       
       # plot
-      p <- oceanexplorer::plot_NOAA(st) +
-        # fix limits of color scale
-        ggplot2::scale_fill_distiller(
-          paste0("diff_", rlang::as_name(y)),
-          type = "div",
-          palette = "PuOr",
-          limits = range(st[[rlang::as_name(y)]], na.rm = TRUE), 
-          na.value = "transparent"
-          )  +
-        gganimate::transition_states(attributes)
+      p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) +
+        gganimate::transition_states(attributes) +
+        ggplot2::labs(title = 'Predicted values ({closest_state})') 
+      
+      pms <- c(height = 400, width = 800) 
   
     } else if (type == "regression") {
     
-      part <- tidyr::unnest(tpart,  cols = .input) |> select(-c(splits, .extracts))
-      output <- tidyr::unnest(output, cols = c(.output)) |> select(-id)
+      part <- tidyr::unnest(tpart,  cols = .data$.input) |> 
+        dplyr::select(-c(.data$splits, .data$.extracts))
+      output <- tidyr::unnest(output, cols = .data$.output) |> 
+        dplyr::select(-.data$id)
+      comb <- dplyr::bind_cols(part, output)
+      # range x
+      x_rng <- comb |> dplyr::pull(!!x) |> range(na.rm = TRUE)
+      # range y
+      y_rng <- comb |> dplyr::pull(!!y) |> range(na.rm = TRUE)
+
       p <- ggplot2::ggplot(
-        dplyr::bind_cols(part, output), 
-        ggplot2::aes(x = .data[[!!x]], y = .data[[!!y]])
+        comb, 
+        # see documentation `gganimate` for grouping structure
+        ggplot2::aes(x = .data[[!!x]], y = .data[[!!y]], group = .data$id) 
         ) +
         ggplot2::geom_point() +
         ggplot2::geom_line(
-          mapping = ggplot2::aes(y = .data[[!!rlang::sym(paste0(".pred_",  rlang::as_name(y)))]]),
+          mapping = ggplot2::aes(
+            y = .data[[!!rlang::sym(paste0(".pred_",  rlang::as_name(y)))]]
+            ),
           linetype = 2,
           color = "blue"
-        ) + 
-        gganimate::transition_states(id)
+        ) +
+        ggplot2::scale_x_continuous(limits = x_rng) +
+        ggplot2::scale_y_continuous(limits = y_rng) +
+        gganimate::transition_states(.data$id) + 
+        ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
+      
+      pms <- c(height = 400, width = 400) 
     } 
     # render
-    p <- gganimate::animate(p, renderer = gganimate::magick_renderer())
+    p <- rlang::inject(
+      gganimate::animate(
+        p, 
+        renderer = gganimate::magick_renderer(),
+        !!!pms
+      )
+    )
     # saving
-    gganimate::anim_save(fs::path(nm, ext = "gif"), animation = p, path = fs::path_package(package = "transferice", "anims"))
+    gganimate::anim_save(
+      fs::path(nm, ext = "gif"), 
+      animation = p, path = fs::path_package(package = "transferice", "anims")
+    )
   } 
-  # depending whether the figure is newly rendered this will go fast or slow
-  fs::path_package("transferice", "anims", nm, ext = "gif") #|> rstudioapi::viewer()
-  
+  # depending whether the figure is newly rendered this function executes fast 
+  # or slow
+  fs::path_package("transferice", "anims", nm, ext = "gif")
 }
 
 cv_model_extraction <- function(tuned_cv) {
@@ -100,7 +132,10 @@ cv_model_extraction <- function(tuned_cv) {
 calc_partials <- function(model, newdat, x, y) {
   x <- rlang::enquo(x)
   y <- rlang::enquo(y)
-  dplyr::mutate(newdat, dplyr::across(-c(.data[[!!x]], .data[[!!y]]), mean, na.rm = TRUE)) |> 
+  dplyr::mutate(
+    newdat, 
+    dplyr::across(-c(.data[[!!x]], .data[[!!y]]), mean, na.rm = TRUE)
+  ) |> 
     predict(object = model)
 }
 
@@ -118,27 +153,40 @@ cv_model_extraction_mem <- memoise::memoise(
     fs::path_package(package = "transferice", "appdir")
   )
 )
-ggpartial_mem <- memoise::memoise(
-  ggpartial, 
-  cache = cachem::cache_disk(
-    fs::path_package(package = "transferice", "appdir")
-  )
-)
 
 interpolate_model <- function(origin, output, y, base_map) {
   y <- rlang::enquo(y)
+  comb <- bind_cols(origin, output)
   # make coordinate sf object
-  crds <- sf::st_as_sf(bind_cols(origin, output), coords = c("longitude", "latitude"), crs =  4326)
-  # remove duplicate locations
-  crds <- dplyr::distinct(crds, hole_id, .keep_all = TRUE)
+  crds <- sf::st_as_sf(
+    comb,
+    coords = c("longitude", "latitude"),
+    crs = 4326
+  )
+  # remove duplicate locations with tolerance 250 km radius
+  d <- sf::st_is_within_distance(crds, dist = 2500)
+  dupl <- unlist(mapply(function(x,y) x[x < y], d, seq_along(d)))
+  crds <- crds[-dupl, ]
+  # estimate
+  est <- paste0(".pred_",  rlang::as_name(y))
   # formula
-  fml <- as.formula(paste0(".pred_",  rlang::as_name(y), "~ 1"))
-  # variogram
-  vario <- automap::autofitVariogram(fml, as(crds, "Spatial"), model = "Exp")
+  fml <- as.formula(paste0(est, "~", rlang::as_name(y)))
+  # nugget based on the RMSE
+  mean_var <- yardstick::rmse(comb, !!y, !!rlang::sym(est))$.estimate 
+  #  partial sill based on the variance of the outcome
+  tot_var <- var(dplyr::pull(comb, !!y))
+  # vario fram
+  vario <- gstat::variogram(fml, crds) 
+  # variogram model fit
+  vario_model <- gstat::fit.variogram(
+    vario, 
+    gstat::vgm(tot_var, "Sph", 700, mean_var)
+  )
   # model
-  g <- gstat::gstat(formula = fml, model = vario$var_model, data = crds)
+  g <- gstat::gstat(formula = fml, data = crds, model = vario_model)
   # interpolate on base grid
   z <- predict(g, base_map)
   z = z["var1.pred",,] # extract prediction
+  names(z) = est # rename
   z
 }

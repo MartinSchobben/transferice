@@ -27,26 +27,6 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
   # join with environmental data
   eigenvectors <- dplyr::left_join(eigenvectors, parm, by = id) 
 
-  # get species / parameter names
-  parm <- sub("_an$", "", var)
-  if (parm %in% c("i", "p", "o", "n")) {
-    element <- c(i = "SiO", p = "PO", o = "O", n = "NO")
-    index <- c(i = 2, p = 4, o = 2, n = 3)
-    xc <- substitute(
-      a[b]~"("*mu*"mol kg"^{"-"}*")", 
-      list(a = element[parm], b = index[parm])
-      )
-  }
-  if (parm == "t") {
-    xc <- expression('Temp ('*degree~C*')')
-  }
-  if (parm == "s") {
-    xc <- "Salinity"
-  }
-  if (parm == "I") {
-    xc <- expression("Density (kg m"^{"-3"}*")")
-  }
-  
   # proportion variance explained 
   eig1 <- eigenvalues[1] ^ 2 / sum(eigenvalues ^ 2) * 100
   eig2 <- eigenvalues[2] ^ 2 / sum(eigenvalues ^ 2) * 100
@@ -62,7 +42,7 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
        )
       ) +
       ggplot2::geom_point(alpha = 0.3) +
-      ggplot2::scale_color_viridis_c(xc) +
+      ggplot2::scale_color_viridis_c(env_parm_labeller(var)) +
       ggplot2::geom_hline(yintercept = 0, lty = 2) +
       ggplot2::geom_vline(xintercept = 0, lty = 2) +
       ggplot2::labs(
@@ -82,7 +62,7 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
         alpha = 0.3, 
         position = "identity"
       ) +
-      ggplot2::scale_fill_viridis_d(xc) +
+      ggplot2::scale_fill_viridis_d(env_parm_labeller(var)) +
       ggplot2::labs(x = paste0(names(eig1), " ", round(eig1, 1), "%"))
   }
 }

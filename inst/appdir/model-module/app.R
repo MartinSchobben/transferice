@@ -2,7 +2,7 @@
 # pool <- get_pool() 
 
 ui <- fluidPage(
-  theme = bslib::bs_theme(bootswatch = "slate"),
+  theme = bslib::bs_theme(bootswatch = "spacelab"),
   model_ui("model")
 )
 

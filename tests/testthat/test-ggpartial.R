@@ -30,6 +30,5 @@ test_that("partial regressions can be plotted", {
     "partial spatial",
     ggpartial(xc, tune = 1, pred = n_an, type = "spatial", base_map = base)
   )
-  
-  })
+})
   

@@ -104,10 +104,10 @@
     },
     "Rcpp": {
       "Package": "Rcpp",
-      "Version": "1.0.8",
+      "Version": "1.0.8.3",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "22b546dd7e337f6c0c58a39983a496bc",
+      "Hash": "32e79b908fda56ee57fe518a8d37b864",
       "Requirements": []
     },
     "SQUAREM": {
@@ -277,6 +277,14 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "741c2e098e98afe3dc26a7b0e5489f4e",
+      "Requirements": []
+    },
+    "curl": {
+      "Package": "curl",
+      "Version": "4.3.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "022c42d49c28e95d69ca60446dbabf88",
       "Requirements": []
     },
     "desc": {
@@ -481,14 +489,18 @@
     },
     "gganimate": {
       "Package": "gganimate",
-      "Version": "1.0.7",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "729026083340f1076e622886c5b337b7",
+      "Version": "1.0.7.9000",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "gganimate",
+      "RemoteUsername": "thomasp85",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "989e0e65e74bbaf43457a253318f2a80ad855c74",
+      "Hash": "84a5a0224e1fc520ca855a35be9f3172",
       "Requirements": [
         "ggplot2",
         "glue",
-        "plyr",
         "progress",
         "rlang",
         "scales",
@@ -772,6 +784,14 @@
       "Hash": "0bde42ee282efb18c7c4e63822f5b4f7",
       "Requirements": []
     },
+    "lpSolve": {
+      "Package": "lpSolve",
+      "Version": "5.6.15",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "90c3bc497e7d5ec9dbb863621be15abb",
+      "Requirements": []
+    },
     "lubridate": {
       "Package": "lubridate",
       "Version": "1.8.0",
@@ -781,6 +801,18 @@
       "Requirements": [
         "cpp11",
         "generics"
+      ]
+    },
+    "magick": {
+      "Package": "magick",
+      "Version": "2.7.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "56fbad418aa50939ed8c3028126af8d7",
+      "Requirements": [
+        "Rcpp",
+        "curl",
+        "magrittr"
       ]
     },
     "magrittr": {
@@ -1507,14 +1539,27 @@
         "xfun"
       ]
     },
+    "transformr": {
+      "Package": "transformr",
+      "Version": "0.1.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "d554a72d831cfa946c6fa0bd9f6bc976",
+      "Requirements": [
+        "Rcpp",
+        "lpSolve",
+        "rlang",
+        "sf",
+        "tweenr"
+      ]
+    },
     "tune": {
       "Package": "tune",
       "Version": "0.1.6.9003",
-      "Source": "Local",
+      "Source": "Repository",
+      "Repository": "CRAN",
       "Remotes": "tidymodels/hardhat, tidymodels/parsnip, tidymodels/recipes,\n        tidymodels/workflows",
-      "RemoteType": "local",
-      "RemoteUrl": "/home/nicola/Documents/work/code/tune",
-      "Hash": "bb969df5be26468136d4c17f93eb49e4",
+      "Hash": "6c09ef751c20fff3c4e1c19b46bb02df",
       "Requirements": [
         "GPfit",
         "cli",

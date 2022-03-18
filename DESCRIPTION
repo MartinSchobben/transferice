@@ -15,6 +15,7 @@ Imports:
     gganimate,
     ggplot2 (>= 3.3.5),
     gstat (>= 2.0.8),
+    magick,
     memoise (>= 2.0.1),
     parsnip (>= 0.2.0.9000),
     pool (>= 0.1.6),
@@ -26,7 +27,9 @@ Imports:
     shiny (>= 1.7.1),
     tibble (>= 3.1.6),
     tidyr (>= 1.2.0),
+    transformr,
     tune,
+    tweenr,
     yardstick (>= 0.0.9)
 Suggests: 
     rmarkdown,
