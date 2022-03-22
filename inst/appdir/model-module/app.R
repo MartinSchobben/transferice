@@ -9,7 +9,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   thematic::thematic_shiny()
-  ggplot2::theme_set(ggplot2::theme_minimal())
+  ggplot2::theme_set(ggplot2::theme_classic())
   model_server("model")
 }
 

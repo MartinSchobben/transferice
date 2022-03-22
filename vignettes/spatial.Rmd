@@ -1,0 +1,67 @@
+---
+title: "spatial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{spatial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(transferice)
+```
+
+
+# IDW and Ordinary Kriging 
+
+Make raster  of area of interest
+ 
+```{r interpolat}
+# filter for the fold and tune
+partials <- dplyr::filter(mdl_extracts, id == "Fold01", num_comp == 1) |> 
+  purrr::flatten()
+
+output <- calc_partials(partials$.extracts, partials$.input, PC1, t_an)
+  
+xc <- bind_cols(partials$splits |> as_tibble(), output) |> 
+  select(longitude, latitude, .pred_t_an)
+  
+# library(gstat)
+library(sf)
+
+prm <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
+  oceanexplorer::filter_NOAA(depth = 30) |> 
+  st_warp(crs = 4326)
+
+# # make coordinate sf object
+# crds <- st_as_sf(xc, coords = c("longitude", "latitude"), crs =  4326)
+# 
+# g <- gstat(formula = .pred_t_an ~ 1, data = crds)
+# z <- predict(g, prm |> select(-t_an))
+# z = z["var1.pred",,]
+# names(z) = "t_an"
+
+```
+
+
+```{r lkrig}
+
+# variogram(.pred_t_an ~ 1, data = crds) |> plot()
+# # fit
+# library(automap)
+# var_fit <- autofitVariogram(.pred_t_an ~ 1, as(crds, "Spatial")) 
+# plot(var_fit)
+# g <- gstat(formula = .pred_t_an ~ 1, model = var_fit$var_model, data = crds)
+# z <- predict(g, prm |> select(-t_an))
+# z = z["var1.pred",,]
+# names(z) = "t_an"
+
+oceanexplorer::plot_NOAA(z)
+```

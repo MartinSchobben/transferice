@@ -18,10 +18,11 @@ model_ui <- function(id) {
             id = NS(id, "school"),
             tabPanel(
               "frequentist",
-              selectInput(NS(id, "model"), "Model type", choices = temp[1]),
+           
+              selectInput(NS(id, "model"), "Model type", choices = c("linear model")),
             ),
             tabPanel("bayesian"),
-            header = selectInput(NS(id, "feature"), "Feature selection", choices = geo),
+            header = tagList(tags$br(), selectInput(NS(id, "feature"), "Feature selection", choices = c("PCA", "logit"), selected = c("PCA", "logit"), multiple = TRUE)),
             footer = actionButton(NS(id, "run"), "Run model")
           )
         )
@@ -64,7 +65,9 @@ model_ui <- function(id) {
       column(
         width = 3,
         wellPanel(
-          selectInput(NS(id, "comp"), "Components", choices =  1:9)
+          tags$h4(textOutput(NS(id, "tuning"))),
+          uiOutput(NS(id, "control")),
+          plotOutput(NS(id, "metrics"))
         )
       )
     )
@@ -105,7 +108,7 @@ model_server <- function(id) {
       transferice_tuning_mem(splt, rcp, mdl)
     })
 
-    mdls <- reactive({
+    parts <- reactive({
       # extract model data per fold
       cv_model_extraction_mem(tun())
     })
@@ -114,7 +117,7 @@ model_server <- function(id) {
     output$rpart <- renderImage({
       # regression folds
       filename <- ggpartial(
-        partials = xc,
+        partials = parts(),
         tune = input$comp,
         pred = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
         type = "regression"
@@ -134,7 +137,7 @@ model_server <- function(id) {
         stars::st_warp(crs = 4326) |> 
         stars::st_downsample(n = 5)
       filename <- ggpartial(
-        partials = xc,
+        partials = parts(),
         tune = input$comp,
         pred = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
         type = "spatial",
@@ -145,7 +148,33 @@ model_server <- function(id) {
     },
     deleteFile = FALSE
     )
-
+    
+    output$tuning <- renderText({"Model tuning"}) |> 
+      bindEvent(parts())
+    
+    # side panel (sub) model metrics
+    output$metrics <- renderPlot({
+      tune::collect_metrics(tun(), summarize = FALSE) |> 
+        dplyr::mutate(slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)) |>
+        filter(.estimate < 100) |>
+        ggplot2::ggplot(
+          ggplot2::aes(
+            x = .data$num_comp, 
+            y = .data$.estimate, 
+            group = .data$num_comp, 
+            fill = .data$slct
+          )
+        ) +
+        ggplot2::geom_boxplot(show.legend = FALSE) +
+        ggplot2::scale_x_discrete("components", labels = NULL) +
+        ggplot2::labs(y = "RMSRE")
+    },
+    width = 250, 
+    height = 250
+    ) 
+    
+    output$control <- renderUI(sliderInput(NS(id, "comp"), "Components", 1, 10, 1)) #|>
+    #   bindEvent(parts(), ignoreInit = TRUE)
 
   })
 }

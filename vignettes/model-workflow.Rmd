@@ -269,7 +269,8 @@ get the metrics
 
 ```{r iterate}
 collect_metrics(dinodat_tuned)
-collect_metrics(dinodat_tuned, summarize = FALSE) |> filter(.estimate < 100) |> 
+collect_metrics(dinodat_tuned, summarize = FALSE) |> 
+  filter(.estimate < 100) |>
   ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
   geom_boxplot()
 ```
@@ -280,68 +281,23 @@ collect_metrics(dinodat_tuned, summarize = FALSE) |> filter(.estimate < 100) |>
 
 ```{r partial}
 mdl_extracts <- cv_model_extraction(dinodat_tuned) 
-ggpartial(mdl_extracts, "Fold01", 2, p_an)
+ggpartial(mdl_extracts, 1, "p_an")
 ```
-
-
-
-
-# IDW and Ordinary Kriging 
-
-Make raster  of area of interest
- 
-```{r interpolat}
-# filter for the fold and tune
-partials <- dplyr::filter(mdl_extracts, id == "Fold01", num_comp == 1) |> 
-  purrr::flatten()
-
-output <- calc_partials(partials$.extracts, partials$.input, PC1, t_an)
-  
-xc <- bind_cols(partials$splits |> as_tibble(), output) |> 
-  select(longitude, latitude, .pred_t_an)
-  
-# library(gstat)
-library(sf)
-
-prm <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
-  oceanexplorer::filter_NOAA(depth = 30) |> 
-  st_warp(crs = 4326)
-
-# # make coordinate sf object
-# crds <- st_as_sf(xc, coords = c("longitude", "latitude"), crs =  4326)
-# 
-# g <- gstat(formula = .pred_t_an ~ 1, data = crds)
-# z <- predict(g, prm |> select(-t_an))
-# z = z["var1.pred",,]
-# names(z) = "t_an"
-
-```
-
-
-```{r lkrig}
-
-# variogram(.pred_t_an ~ 1, data = crds) |> plot()
-# # fit
-# library(automap)
-# var_fit <- autofitVariogram(.pred_t_an ~ 1, as(crds, "Spatial")) 
-# plot(var_fit)
-# g <- gstat(formula = .pred_t_an ~ 1, model = var_fit$var_model, data = crds)
-# z <- predict(g, prm |> select(-t_an))
-# z = z["var1.pred",,]
-# names(z) = "t_an"
-
-oceanexplorer::plot_NOAA(z)
-```
-
-
 
 # Finalize
 
-
 ```{r final}
 # select best
-lm_final_wfl <- finalize_workflow(lm_tune_wfl, tibble(num_comp = 3, .config = "Preprocessor03_Model1"))
-final_outcome <- last_fit(lm_final_wfl, split = dinodat_split, metrics = metric_set(rmsre, rmse, rsq))
+lm_final_wfl <- finalize_workflow(
+  lm_tune_wfl, 
+  tibble(num_comp = 3, .config = "Preprocessor03_Model1")
+  )
+final_outcome <- last_fit(
+  lm_final_wfl, 
+  split = dinodat_split,
+  metrics = metric_set(rmsre, rmse, rsq)
+  )
+# metrics
 final_outcome |> collect_metrics()
 
 final_fit <- rename_with(

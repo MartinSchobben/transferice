@@ -57,7 +57,6 @@ ggpartial <- function(partials, tune, pred, type = "regression",
         )
   
       # calculate differences
-      # diff <- lapply(z$z, function(x) base_map - x)
       st <- rlang::inject(c(!!!z$z, nms = z$id)) # combine and rename
       st = merge(st) # collapse to dimension
       names(st) = rlang::as_name(y) # rename
@@ -67,7 +66,7 @@ ggpartial <- function(partials, tune, pred, type = "regression",
         gganimate::transition_states(attributes) +
         ggplot2::labs(title = 'Predicted values ({closest_state})') 
       
-      pms <- c(height = 400, width = 800) 
+      pms <- c(height = 300, width = 600) 
   
     } else if (type == "regression") {
     

@@ -51,7 +51,7 @@ transferice_tuning <- function(split, recipe, model) {
     wfl,
     resamples = dat_cv,
     grid = tune_grid,
-    metrics = yardstick::metric_set(transferice::rmsre),
+    metrics = yardstick::metric_set(transferice::rmsre), # custom metric
     control = ctrl
     )
 }
