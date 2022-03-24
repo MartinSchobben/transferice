@@ -1,10 +1,10 @@
-transferice_recipe <- function(dat, tunable = TRUE) {
+transferice_workflow <- function(dat, model, tunable = TRUE) {
 
   # parameter names
   pms <- paste0(abbreviate_vars(parms), "_an", collapse = "+")
   # dinocysts ids
   rm <- c(paste0(abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
-  dns <- paste0(paste0("`", names(dat)[!names(dinodat) %in% rm], "`"), collapse = "+")
+  dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), collapse = "+")
  
   # formula
   fml <- as.formula(paste0(pms, "~", dns))
@@ -13,29 +13,30 @@ transferice_recipe <- function(dat, tunable = TRUE) {
   
   # scaling
   rcp <- recipes::step_logit(rcp, recipes::all_predictors(), offset = 0.025) 
+  
   # dimensions reduction (PCA)
   if (isTRUE(tunable)) {
-    recipes::step_pca(
+    rcp <- recipes::step_pca(
       rcp,
       recipes::all_predictors(), 
       num_comp = tune::tune(), 
       options = list(center = TRUE)
       )
   } else {
-    recipes::step_pca(
+    rcp <- recipes::step_pca(
       rcp,
       recipes::all_predictors(), 
       options = list(center = TRUE)
     )
   }
-}
-
-transferice_tuning <- function(split, recipe, model) {
   
   # workflow
-  wfl <- workflows::workflow() |>
-    workflows::add_recipe(recipe) |>
+  workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
     workflows::add_model(model)
+}
+
+transferice_tuning <- function(split, wfl) {
   
   # cross validation resampling
   dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10)
@@ -53,7 +54,7 @@ transferice_tuning <- function(split, recipe, model) {
     grid = tune_grid,
     metrics = yardstick::metric_set(transferice::rmsre), # custom metric
     control = ctrl
-    )
+  )
 }
 
 # memoise function

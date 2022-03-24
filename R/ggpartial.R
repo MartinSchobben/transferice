@@ -9,16 +9,22 @@
 #' @return
 #' @export
 ggpartial <- function(partials, tune, pred, type = "regression", 
-                       base_map = NULL) {
+                       base_map = NULL, plot_type =  "dynamic") {
   
   x <- rlang::sym(paste0("PC", tune))
   y <- rlang::enquo(pred) 
+  
+  # check for base_map
+  if (is.null(base_map) & type == "spatial") {
+    stop(paste0("Provide a basemap as a raster object when selecting,", 
+                "`type` = 'spatial'."), call. = FALSE)
+  }
   
   # filter tune parameter setting
   tpart <- dplyr::filter(partials, .data$num_comp == tune)
 
   # predicted values
-  output <- transmute(
+  output <- dplyr::transmute(
     tpart, 
     id = .data$id,
     .output = purrr::map2(
@@ -33,17 +39,29 @@ ggpartial <- function(partials, tune, pred, type = "regression",
   
   # name file and potential path
   nm <- paste("folds", type, rlang::as_name(y), rlang::as_name(x), sep = "_")
-  gif_path <- try(
-    fs::path_package("transferice", "anims", nm, ext = "gif"), 
-    silent = TRUE
-  )
+  if (plot_type == "dynamic") {
+    
+    gif_path <- try(
+      fs::path_package("transferice", "anims", nm, ext = "gif"), 
+      silent = TRUE
+    )
+    
+  } else if (plot_type == "static") {
+    
+    gif_path <- try(
+      fs::path_package("transferice", "plots", nm, ext = "png"), 
+      silent = TRUE
+    )
+    
+  }
   
-  # if the file does not exit then render from scratch
+  # if the file does not exist then render from scratch
   if (inherits(gif_path, "try-error")) {
-
+    
+    # determine type of statistics and build plot base
     if (type == "spatial") {
       # original data
-      origin <- transmute(tpart, origin = purrr::map(splits, as_tibble)) 
+      origin <- dplyr::transmute(tpart, origin = purrr::map(splits, tibble::as_tibble)) 
   
       # spatial interpolation for each fold
       z <- dplyr::bind_cols(origin, output) |> 
@@ -56,18 +74,13 @@ ggpartial <- function(partials, tune, pred, type = "regression",
             )
         )
   
-      # calculate differences
       st <- rlang::inject(c(!!!z$z, nms = z$id)) # combine and rename
       st = merge(st) # collapse to dimension
       names(st) = rlang::as_name(y) # rename
-      
+        
       # plot
-      p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) +
-        gganimate::transition_states(attributes) +
-        ggplot2::labs(title = 'Predicted values ({closest_state})') 
-      
-      pms <- c(height = 300, width = 600) 
-  
+      p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) 
+
     } else if (type == "regression") {
     
       part <- tidyr::unnest(tpart,  cols = .data$.input) |> 
@@ -79,7 +92,7 @@ ggpartial <- function(partials, tune, pred, type = "regression",
       x_rng <- comb |> dplyr::pull(!!x) |> range(na.rm = TRUE)
       # range y
       y_rng <- comb |> dplyr::pull(!!y) |> range(na.rm = TRUE)
-
+  
       p <- ggplot2::ggplot(
         comb, 
         # see documentation `gganimate` for grouping structure
@@ -94,29 +107,81 @@ ggpartial <- function(partials, tune, pred, type = "regression",
           color = "blue"
         ) +
         ggplot2::scale_x_continuous(limits = x_rng) +
-        ggplot2::scale_y_continuous(limits = y_rng) +
-        gganimate::transition_states(.data$id) + 
-        ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
+        ggplot2::scale_y_continuous(limits = y_rng) 
       
-      pms <- c(height = 400, width = 400) 
     } 
-    # render
-    p <- rlang::inject(
-      gganimate::animate(
-        p, 
-        renderer = gganimate::magick_renderer(),
-        !!!pms
+
+    if (plot_type  == "dynamic") {
+    
+      if (type == "spatial") {
+        
+        p <- p+ gganimate::transition_states(attributes) +
+          ggplot2::labs(title = 'Predicted values ({closest_state})')
+        
+        pms <- c(height = 300, width = 600) # dimensions of gif
+        
+      } else  if (type == "regression") {
+        
+        p <- p + gganimate::transition_states(.data$id) + 
+          ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
+        
+        pms <- c(height = 400, width = 400) # dimensions of gif
+        
+      }
+    
+        # render
+        p <- rlang::inject(
+          gganimate::animate(
+            p, 
+            renderer = gganimate::magick_renderer(),
+            !!! pms
+          )
+        )
+      
+        # saving
+        gganimate::anim_save(
+          fs::path(nm, ext = "gif"), 
+          animation = p, 
+          path = fs::path_package(package = "transferice", "anims")
+        )
+        
+    } else if (plot_type == "static") {
+      
+      if (type == "spatial") { 
+        p <- p + ggplot2::facet_wrap(ggplot2::vars(.data$attributes)) + 
+          ggplot2::labs(title = "Partial regressions")
+        
+      } else if (type == "regression") {
+          
+        p <- p + ggplot2::facet_wrap(ggplot2::vars(.data$id)) + 
+          ggplot2::labs(title = 'Partial regressions', y = lbl)
+
+      }
+    
+      # saving
+      ggplot2::ggsave(
+        fs::path(nm, ext = "png"),
+        plot = p, 
+        path = fs::path_package(package = "transferice", "plots"),
+        width = 20,
+        height = 20,
+        units = "cm"
       )
-    )
-    # saving
-    gganimate::anim_save(
-      fs::path(nm, ext = "gif"), 
-      animation = p, path = fs::path_package(package = "transferice", "anims")
-    )
+    
+    } 
   } 
-  # depending whether the figure is newly rendered this function executes fast 
-  # or slow
-  fs::path_package("transferice", "anims", nm, ext = "gif")
+    
+  # depending whether the figure is newly rendered this function executes 
+  # fast or slow
+  if (plot_type == "static") {
+    
+    fs::path_package("transferice", "plots", nm, ext = "png") 
+    
+  } else if (plot_type == "dynamic") {
+    
+    fs::path_package("transferice", "anims", nm, ext = "gif")  
+    
+  }
 }
 
 cv_model_extraction <- function(tuned_cv) {
@@ -155,7 +220,7 @@ cv_model_extraction_mem <- memoise::memoise(
 
 interpolate_model <- function(origin, output, y, base_map) {
   y <- rlang::enquo(y)
-  comb <- bind_cols(origin, output)
+  comb <- dplyr::bind_cols(origin, output)
   # make coordinate sf object
   crds <- sf::st_as_sf(
     comb,

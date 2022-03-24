@@ -4,7 +4,14 @@
 \alias{ggpartial}
 \title{ggpartial}
 \usage{
-ggpartial(partials, fold, tune, pred, type = "regression", base_map = NULL)
+ggpartial(
+  partials,
+  tune,
+  pred,
+  type = "regression",
+  base_map = NULL,
+  plot_type = "dynamic"
+)
 }
 \arguments{
 \item{model}{Parsnip model object}

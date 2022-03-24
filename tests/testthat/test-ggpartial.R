@@ -3,22 +3,25 @@ test_that("partial regressions can be plotted", {
   set.seed(1)
   # resample
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
-  # recipe
-  rcp <- transferice_recipe(dinodat)
+  
   # model
   mdl <- parsnip::linear_reg() |>
     parsnip::set_engine('lm') |>
     parsnip::set_mode('regression')
+  
+  # workflow
+  wfl <- transferice_workflow(dinodat, mdl)
+
   # tuning
   set.seed(2)
-  tuned_cv <- transferice_tuning(splt, rcp, mdl)
+  tuned_cv <- transferice_tuning(splt, wfl)
   
   xc <- cv_model_extraction(tuned_cv)
   
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(xc, tune = 1, pred = t_an)
+    ggpartial(xc, tune = 1, pred = t_an, plot_type = "static")
   )
   # partial map projection
   base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
@@ -28,7 +31,8 @@ test_that("partial regressions can be plotted", {
   
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(xc, tune = 1, pred = n_an, type = "spatial", base_map = base)
+    ggpartial(xc, tune = 1, pred = n_an, type = "spatial", base_map = base, 
+              plot_type = "static")
   )
 })
   

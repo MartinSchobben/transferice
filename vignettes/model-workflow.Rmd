@@ -275,13 +275,11 @@ collect_metrics(dinodat_tuned, summarize = FALSE) |>
   geom_boxplot()
 ```
 
-
 # Partial regression plots
-
 
 ```{r partial}
 mdl_extracts <- cv_model_extraction(dinodat_tuned) 
-ggpartial(mdl_extracts, 1, "p_an")
+ggpartial(mdl_extracts, 1, "t_an", plot_type = "static")
 ```
 
 # Finalize
@@ -290,13 +288,13 @@ ggpartial(mdl_extracts, 1, "p_an")
 # select best
 lm_final_wfl <- finalize_workflow(
   lm_tune_wfl, 
-  tibble(num_comp = 3, .config = "Preprocessor03_Model1")
-  )
+  tibble(num_comp = 3)#, .config = "Preprocessor03_Model1")
+)
 final_outcome <- last_fit(
   lm_final_wfl, 
   split = dinodat_split,
   metrics = metric_set(rmsre, rmse, rsq)
-  )
+)
 # metrics
 final_outcome |> collect_metrics()
 
@@ -322,5 +320,5 @@ ggplot(long_final, aes(x = .truth, y = .pred)) +
     title = 'R-Squared Plot',       
     y = 'Predicted',        
     x = 'Actual'
-  )
+)
 ```
