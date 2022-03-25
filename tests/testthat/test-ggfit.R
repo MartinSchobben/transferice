@@ -38,11 +38,11 @@ test_that("final model output can be plotted", {
   ggfit(final, abbreviate_vars(parms), selected = "t")
   
   # map projection
-  base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |>
+  base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
     oceanexplorer::filter_NOAA(depth = 0) |>
     stars::st_warp(crs = 4326) |>
     stars::st_downsample(n = 5)
 
-  ggfit(final, abbreviate_vars(parms), selected = "t", type = "spatial", base_map = base)
+  ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
 })
 

@@ -12,31 +12,36 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
                   type = "regression", base_map = NULL) {
 
   # parameter of interest
-  pm <- paste(selected, averaging, sep = "_") # single
-  # all parameter
-  pms <- paste(parms, averaging, sep = "_") # all
+  pm <- paste(selected, averaging, sep = "_") 
+  # all parameters
+  pms <- paste(parms, averaging, sep = "_") 
+  
+  # number of components used for prediction
+  mold <- final$.workflow[[1]] |> workflows::extract_mold()
+  comps <- ncol(mold$predictors)
   
   # name file and potential path
-  nm <- paste("final", type, selected, averaging, sep = "_")
+  nm <- paste("final", type, selected, averaging, paste0("PC", comps), sep = "_")
   im_path <- try(
     fs::path_package("transferice", "plots", nm, ext = "png"), 
     silent = TRUE
-   )
-    
+  )
+  
   if (inherits(im_path, "try-error")) {
   
-    # extract predicitons
+    # extract predictions
     preds <- tune::collect_predictions(final)
     
     if (type == "spatial") {
       # original data
       origin <- dplyr::transmute(final, origin = purrr::map(splits, rsample::testing)) |> 
         tidyr::unnest(cols = c(origin))
+      # predictions
       output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
       # interpolate
       z <- interpolate_model(origin, output, !!rlang::sym(pm), base_map)
       
-      # difference
+      # difference on raster (predicted - truth)
       z <- z - base_map
       names(z) = pm # rename
       
@@ -45,7 +50,8 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
       
       # plot (suppres waqrning of replacing fill scale)
       p <- oceanexplorer::plot_NOAA(z) +
-        ggplot2::scale_fill_distiller(lbl, type = "div", palette = "PuOr")
+        ggplot2::scale_fill_gradient2(lbl) +
+        ggplot2::ggtitle(glue::glue("Difference in prediction (# {comps} components)"))
       
     } else if (type == "regression") {
   
@@ -78,7 +84,7 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
         ggplot2::geom_point() +  
         ggplot2::geom_abline(color = 'blue', linetype = 2) +
         ggplot2::labs(
-          title = 'R-squared Plot',       
+          title = glue::glue('R-squared Plot (# {comps} components)'),       
           y = 'Predicted',        
           x = 'Actual'
         )
@@ -88,7 +94,6 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
       } else {
         p <- p
       }
-    
     }
     
     # save plot

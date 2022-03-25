@@ -5,10 +5,14 @@
 #' @return
 #' @export
 model_ui <- function(id) {
+  # namespace
+  ns <- NS(id)
+  # elements
   tagList(
+    
     # Application title
     titlePanel("Training transfer functions"),
-    
+
     # Parameter and statistic selection
     fluidRow(
       column(
@@ -18,12 +22,45 @@ model_ui <- function(id) {
             id = NS(id, "school"),
             tabPanel(
               "frequentist",
-           
-              selectInput(NS(id, "model"), "Model type", choices = c("linear model")),
+              selectInput(
+                NS(id, "model"), 
+                "Model type", 
+                choices = c("linear model (least squares)", 
+                            "linear model (generalised least squares)")
+                ),
             ),
             tabPanel("bayesian"),
-            header = tagList(tags$br(), selectInput(NS(id, "feature"), "Feature selection", choices = c("PCA", "logit"), selected = c("PCA", "logit"), multiple = TRUE)),
-            footer = actionButton(NS(id, "run"), "Run model")
+            header = tagList(
+              tags$br(), 
+              selectInput(
+                ns("scale"), 
+                "Predictor scaling", 
+                choices = c("logit")
+              ),
+              shinyBS::bsTooltip(
+                id = ns("scale"), 
+                title = "Scaling makes comparisons between predictors more straightforward.",
+                trigger = "hover"
+                # placement = "right", 
+                # options = list(container = "body")
+              ),
+              selectInput(
+                NS(id, "dims"), 
+                "Dimension reduction", 
+                choices = c("PCA", "PLS")
+              ),
+              shinyBS::bsTooltip(
+                id = NS(id, "dims"), 
+                title = "The many species found at each site require a reduction of dimensions.",
+                # placement = "right", 
+                options = list(container = "body")
+              ),
+            ),
+            footer = tagList(
+              tags$br(), 
+              tags$br(), 
+              actionButton(NS(id, "run"), "Run model")
+            )
           )
         )
       ),
@@ -59,9 +96,20 @@ model_ui <- function(id) {
       column(
         width = 3,
         wellPanel(
-          tags$h4(textOutput(NS(id, "tuning"))),
-          uiOutput(NS(id, "control")),
-          plotOutput(NS(id, "metrics"))
+          tabsetPanel(
+            id = NS(id, "results"),
+            header = tagList(tags$h5(textOutput(NS(id, "results"))), tags$hr()),
+            tabPanelBody(
+              value = "tuning",
+              uiOutput(NS(id, "control")),
+              plotOutput(NS(id, "submetrics"))
+            ),
+            tabPanelBody(
+              value = "validation",
+              uiOutput(NS(id, "finmetrics"))
+            ),
+            type = "hidden"
+          )
         )
       )
     )
@@ -111,7 +159,7 @@ model_server <- function(id) {
     # reactivevalues to store image path
     pth <- reactiveValues(part = NULL, fit = NULL)
     
-    
+    # base map (for kriging interpolation)
     base <- reactive({
       # parameter
       pm <- parms[abbreviate_vars(parms) == input$parm]
@@ -122,6 +170,7 @@ model_server <- function(id) {
         stars::st_downsample(n = 5)
     })
     
+    # different CV parts (regression)
     observe({
       # regression folds
       filename <- ggpartial(
@@ -131,12 +180,11 @@ model_server <- function(id) {
         type = if (isTruthy(input$toggle))  "spatial" else "regression",
         base_map = base()
       )
-      
-      # save in `reactiveValue`
+      # save in `reactiveValues`
       pth$part <- filename
     })
     
-    # the different CV parts (regression)
+    # CV animations
     output$part <- renderImage({
       req(pth$part)
       # filename
@@ -147,10 +195,13 @@ model_server <- function(id) {
     
     # finalize model
     final <- reactive({
+      req(input$comp)
+      # finalize workflow by selecting optimal sub-model
       final_wfl <- tune::finalize_workflow(
         wfl(),
         tibble::tibble(num_comp = input$comp)
       )
+      # fit the final model
       tune::last_fit(
         final_wfl,
         split =  splt(),
@@ -161,9 +212,9 @@ model_server <- function(id) {
             yardstick::rsq
           )
       )
-    })
+    }) 
     
-    # the final model plotted as R-squared plot
+    # final model plotted as R-squared plot
     observe({
       # parameter
       pm <- abbreviate_vars(parms)[abbreviate_vars(parms) == input$parm]
@@ -173,13 +224,12 @@ model_server <- function(id) {
         selected = pm,
         type = if (isTruthy(input$toggle))  "spatial" else "regression",
         base_map = base()
-        )
-      
+      )
       # save in `reactiveValues`
       pth$final <- filename
     })
-
-    # the different CV parts (regression)
+    
+    # final model image
     output$final <- renderImage({
       req(pth$final)
       # filename
@@ -188,32 +238,64 @@ model_server <- function(id) {
     deleteFile = FALSE
     )
     
-    # observe(message(glue::glue("{final()}")))
     # side panel (sub) model metrics
-    # output$tuning <- renderText({"Model tuning"}) |> 
-    #   bindEvent(parts())
-    # 
-    # output$metrics <- renderPlot({
-    #   tune::collect_metrics(tun(), summarize = FALSE) |> 
-    #     dplyr::mutate(slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)) |>
-    #     filter(.estimate < 100) |>
-    #     ggplot2::ggplot(
-    #       ggplot2::aes(
-    #         x = .data$num_comp, 
-    #         y = .data$.estimate, 
-    #         group = .data$num_comp, 
-    #         fill = .data$slct
-    #       )
-    #     ) +
-    #     ggplot2::geom_boxplot(show.legend = FALSE) +
-    #     ggplot2::scale_x_discrete("components", labels = NULL) +
-    #     ggplot2::labs(y = "RMSRE")
-    # },
-    # width = 250, 
-    # height = 250
-    # ) 
-    # 
-    output$control <- renderUI(sliderInput(NS(id, "comp"), "Components", 1, 10, 1))
+    output$results <- renderText({
+      if (input$specs == "tuning") {
+        "Optimize model"
+      } else if (input$specs == "validation") {
+        "Model performance"
+      }
+    }) 
+    
+    # show locations selection controls when data loaded
+    observe({
+      updateTabsetPanel(session, "results", selected = input$specs)
+    })
+    
+    # collect sub-model metrics
+    submet <- reactive({     
+      req(input$comp)
+      tune::collect_metrics(tun(), summarize = FALSE) |>
+        dplyr::mutate(
+          slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
+          ) |>
+        filter(.estimate < 100) # remove extreme outliers
+      }) 
+    
+    # plot the ssubmodel metrics as a boxplot
+    output$submetrics <- renderPlot({
+      req(input$comp)
+      ggplot2::ggplot(
+        submet(),
+        ggplot2::aes(
+          x = .data$num_comp,
+          y = .data$.estimate,
+          group = .data$num_comp,
+          fill = .data$slct
+        )
+      ) +
+      ggplot2::geom_boxplot(show.legend = FALSE) +
+      ggplot2::scale_x_discrete("components", labels = as.character(1:10), breaks = 1:10) +
+      ggplot2::labs(y = "RMSRE")
+    },
+    width = 250,
+    height = 250
+    ) 
+    
+    # final model metric as table in sidepanel
+    output$finmetrics <- renderUI({
+      mts <- tune::collect_metrics(final())
+      a <- sprintf("$r^{2}$ = %.03f", mts[mts[[".metric"]] == "rsq",".estimate", drop  = TRUE])
+      b <- paste("RMSE =", mts[mts[[".metric"]] == "rmse",".estimate", drop  = TRUE])
+      c <- paste("RMSRE =", mts[mts[[".metric"]] == "rmsre",".estimate", drop  = TRUE])
+      
+      withMathJax(paste(a, b, c, sep = "\n"))
+    }) 
+    
+    # render controller based on tuning results
+    output$control <- renderUI({
+      sliderInput(NS(id, "comp"), "Components", 1, 10, 1)
+    }) 
 
   })
 }

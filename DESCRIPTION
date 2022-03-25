@@ -25,6 +25,7 @@ Imports:
     rsample (>= 0.1.1),
     sf (>= 1.0.7),
     shiny (>= 1.7.1),
+    shinyWidgets,
     tibble (>= 3.1.6),
     tidyr (>= 1.2.0),
     transformr,

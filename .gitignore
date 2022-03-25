@@ -9,6 +9,7 @@
 .Rdata
 
 # derived filetypes
+/**/*.gif
 /**/*.png
 /**/*.pdf
 /**/*.xlsx
