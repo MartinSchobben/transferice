@@ -54,18 +54,18 @@
     },
     "MASS": {
       "Package": "MASS",
-      "Version": "7.3-55",
+      "Version": "7.3-56",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "c5232ffb549f6d7a04a152c34ca1353d",
+      "Hash": "af0e1955cb80bb36b7988cc657db261e",
       "Requirements": []
     },
     "Matrix": {
       "Package": "Matrix",
-      "Version": "1.4-0",
+      "Version": "1.4-1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "130c0caba175739d98f2963c6a407cf6",
+      "Hash": "699c47c606293bdfbc9fd78a93c9c8fe",
       "Requirements": [
         "lattice"
       ]
@@ -104,10 +104,10 @@
     },
     "Rcpp": {
       "Package": "Rcpp",
-      "Version": "1.0.8",
+      "Version": "1.0.8.3",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "22b546dd7e337f6c0c58a39983a496bc",
+      "Hash": "32e79b908fda56ee57fe518a8d37b864",
       "Requirements": []
     },
     "SQUAREM": {
@@ -489,14 +489,18 @@
     },
     "gganimate": {
       "Package": "gganimate",
-      "Version": "1.0.7",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "729026083340f1076e622886c5b337b7",
+      "Version": "1.0.7.9000",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "gganimate",
+      "RemoteUsername": "thomasp85",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "989e0e65e74bbaf43457a253318f2a80ad855c74",
+      "Hash": "84a5a0224e1fc520ca855a35be9f3172",
       "Requirements": [
         "ggplot2",
         "glue",
-        "plyr",
         "progress",
         "rlang",
         "scales",
@@ -1347,6 +1351,17 @@
         "xtable"
       ]
     },
+    "shinyBS": {
+      "Package": "shinyBS",
+      "Version": "0.61",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f895dafd39733c4a70d425f605a832e7",
+      "Requirements": [
+        "htmltools",
+        "shiny"
+      ]
+    },
     "shinyWidgets": {
       "Package": "shinyWidgets",
       "Version": "0.6.4",
@@ -1566,11 +1581,10 @@
     "tune": {
       "Package": "tune",
       "Version": "0.1.6.9003",
-      "Source": "Local",
+      "Source": "Repository",
+      "Repository": "CRAN",
       "Remotes": "tidymodels/hardhat, tidymodels/parsnip, tidymodels/recipes,\n        tidymodels/workflows",
-      "RemoteType": "local",
-      "RemoteUrl": "/home/nicola/Documents/work/code/tune",
-      "Hash": "bb969df5be26468136d4c17f93eb49e4",
+      "Hash": "6c09ef751c20fff3c4e1c19b46bb02df",
       "Requirements": [
         "GPfit",
         "cli",

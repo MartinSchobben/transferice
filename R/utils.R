@@ -22,18 +22,20 @@ calc_taxon_prop <- function(count, meta, con) {
 }
 
 # species names for selection
-species_naming <- function(con) {
-  species_tb <- DBI::dbReadTable(con, "neptune_taxonomy") |> 
-    dplyr::mutate(
-      dplyr::across(
-        tidyselect::vars_select_helpers$where(is.character),  
+species_naming <- function(dat) {
+    
+ species_tb <- DBI::dbReadTable(dat, "neptune_taxonomy") |> 
+   dplyr::mutate(
+     dplyr::across(
+       tidyselect::vars_select_helpers$where(is.character),  
         ~tidyr::replace_na(.x, "")
-        )
-      ) 
+      )
+    )
+ 
   setNames(
     species_tb$taxon_id, 
     nm = paste(species_tb$genus, species_tb$species, species_tb$subspecies)
-    )
+  )
 }
 
 #' Title

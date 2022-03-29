@@ -9,7 +9,7 @@
 #' @export
 #'
 ggfit <- function(final, parms, averaging = "an", selected = "all", 
-                  type = "regression", base_map = NULL) {
+                  type = "regression", base_map = NULL, preprocessor = NULL) {
 
   # parameter of interest
   pm <- paste(selected, averaging, sep = "_") 
@@ -18,10 +18,22 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
   
   # number of components used for prediction
   mold <- final$.workflow[[1]] |> workflows::extract_mold()
-  comps <- ncol(mold$predictors)
+  n_comps <- ncol(mold$predictors) # dimensions after processing
+  n_preds <- mold$blueprint$recipe$var_info |>  # dimensions original
+    dplyr::filter(role == "predictor") |> 
+    nrow()
   
-  # name file and potential path
-  nm <- paste("final", type, selected, averaging, paste0("PC", comps), sep = "_")
+  # name file, plot title and potential path
+  if (n_preds > n_comps) {
+    lbl <- paste0("PC", n_comps) 
+    ttl_reg <- glue::glue('R-squared Plot (# {n_comps} components)')
+    ttl_spat <- glue::glue("Difference in prediction (# {n_comps} components)")
+  } else {
+    lbl <- n_preds
+    ttl_reg <- glue::glue('R-squared Plot')
+    ttl_spat <- glue::glue("Difference in prediction")
+  }
+  nm <- paste("final", type, preprocessor, selected, averaging, lbl, sep = "_")
   im_path <- try(
     fs::path_package("transferice", "plots", nm, ext = "png"), 
     silent = TRUE
@@ -51,7 +63,7 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
       # plot (suppres waqrning of replacing fill scale)
       p <- oceanexplorer::plot_NOAA(z) +
         ggplot2::scale_fill_gradient2(lbl) +
-        ggplot2::ggtitle(glue::glue("Difference in prediction (# {comps} components)"))
+        ggplot2::ggtitle(ttl_spat)
       
     } else if (type == "regression") {
   
@@ -84,7 +96,7 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
         ggplot2::geom_point() +  
         ggplot2::geom_abline(color = 'blue', linetype = 2) +
         ggplot2::labs(
-          title = glue::glue('R-squared Plot (# {comps} components)'),       
+          title = ttl_reg,       
           y = 'Predicted',        
           x = 'Actual'
         )

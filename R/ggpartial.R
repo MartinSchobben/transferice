@@ -8,11 +8,20 @@
 #'
 #' @return
 #' @export
-ggpartial <- function(partials, tune, pred, type = "regression", 
-                       base_map = NULL, plot_type =  "dynamic") {
+ggpartial <- function(partials, pred = NULL, tune = NULL, out, type = "regression", 
+                       base_map = NULL, plot_type =  "dynamic", preprocessor = NULL) {
   
-  x <- rlang::sym(paste0("PC", tune))
-  y <- rlang::enquo(pred) 
+  # predictor variable (either for tuning or just inspection)
+  if (!is.null(tune) & is.null(pred)) {
+    x <- rlang::sym(paste0("PC", tune))
+  } else if (!is.null(pred) & is.null(tune)) {
+    x <- rlang::enquo(pred) 
+  } else {
+    stop("Either a predictor or tune dial should be supplied, not both.", call. = FALSE)
+  }
+
+  # outcome variable
+  y <- rlang::enquo(out) 
   
   # check for base_map
   if (is.null(base_map) & type == "spatial") {
@@ -21,11 +30,13 @@ ggpartial <- function(partials, tune, pred, type = "regression",
   }
   
   # filter tune parameter setting
-  tpart <- dplyr::filter(partials, .data$num_comp == tune)
-
+  if (!is.null(tune)) {
+    partials <- dplyr::filter(partials, .data$num_comp == tune)
+  }
+  
   # predicted values
   output <- dplyr::transmute(
-    tpart, 
+    partials, 
     id = .data$id,
     .output = purrr::map2(
       .data$.extracts, 
@@ -38,7 +49,7 @@ ggpartial <- function(partials, tune, pred, type = "regression",
   lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
   
   # name file and potential path
-  nm <- paste("folds", type, rlang::as_name(y), rlang::as_name(x), sep = "_")
+  nm <- paste("folds", type, preprocessor, rlang::as_name(y), rlang::as_name(x), sep = "_")
   if (plot_type == "dynamic") {
     
     gif_path <- try(
@@ -61,7 +72,10 @@ ggpartial <- function(partials, tune, pred, type = "regression",
     # determine type of statistics and build plot base
     if (type == "spatial") {
       # original data
-      origin <- dplyr::transmute(tpart, origin = purrr::map(splits, tibble::as_tibble)) 
+      origin <- dplyr::transmute(
+        partials, 
+        origin = purrr::map(splits, tibble::as_tibble)
+      ) 
   
       # spatial interpolation for each fold
       z <- dplyr::bind_cols(origin, output) |> 
@@ -83,7 +97,7 @@ ggpartial <- function(partials, tune, pred, type = "regression",
 
     } else if (type == "regression") {
     
-      part <- tidyr::unnest(tpart,  cols = .data$.input) |> 
+      part <- tidyr::unnest(partials,  cols = .data$.input) |> 
         dplyr::select(-c(.data$splits, .data$.extracts))
       output <- tidyr::unnest(output, cols = .data$.output) |> 
         dplyr::select(-.data$id)

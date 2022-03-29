@@ -1,4 +1,4 @@
-test_that("partial regressions can be plotted", {
+test_that("partial regressions can be plotted with tuning", {
   
   set.seed(1)
   # resample
@@ -10,7 +10,7 @@ test_that("partial regressions can be plotted", {
     parsnip::set_mode('regression')
   
   # workflow
-  wfl <- transferice_workflow(dinodat, mdl)
+  wfl <- transferice_workflow(dinodat, mdl, scale = "logit", dim_reduction = "PCA")
 
   # tuning
   set.seed(2)
@@ -21,7 +21,7 @@ test_that("partial regressions can be plotted", {
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(xc, tune = 1, pred = t_an, plot_type = "static")
+    ggpartial(xc, tune = 1, out = t_an, plot_type = "static")
   )
   # partial map projection
   base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
@@ -31,8 +31,46 @@ test_that("partial regressions can be plotted", {
   
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(xc, tune = 1, pred = n_an, type = "spatial", base_map = base, 
+    ggpartial(xc, tune = 1, out = n_an, type = "spatial", base_map = base, 
               plot_type = "static")
   )
 })
   
+test_that("partial regressions can be plotted without tuning", {
+  
+  set.seed(1)
+  # resample
+  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  
+  # model
+  mdl <- parsnip::linear_reg() |>
+    parsnip::set_engine('lm') |>
+    parsnip::set_mode('regression')
+  
+  # workflow
+  wfl <- transferice_workflow(dinodat, mdl, trans = c("logit", "center"))
+  
+  # tuning
+  set.seed(2)
+  fitted_cv <- transferice_tuning(splt, wfl)
+  
+  xc <- cv_model_extraction(fitted_cv)
+  
+  # partial regressions
+  vdiffr::expect_doppelganger(
+    "partial regression",
+    ggpartial(xc, pred = "44", out = t_an, plot_type = "static")
+  )
+  # partial map projection
+  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
+    oceanexplorer::filter_NOAA(depth = 0) |> 
+    stars::st_warp(crs = 4326) |> 
+    stars::st_downsample(n = 5)
+  
+  vdiffr::expect_doppelganger(
+    "partial spatial",
+    ggpartial(xc, pred = "44", out = n_an, type = "spatial", base_map = base, 
+              plot_type = "static")
+  )
+})
+

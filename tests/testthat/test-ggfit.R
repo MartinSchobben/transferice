@@ -1,4 +1,4 @@
-test_that("final model output can be plotted", {
+test_that("final model output can be plotted with tuning", {
   
   set.seed(1)
   # resample
@@ -10,7 +10,7 @@ test_that("final model output can be plotted", {
     parsnip::set_mode('regression')
   
   # workflow
-  wfl <- transferice_workflow(dinodat, mdl)
+  wfl <- transferice_workflow(dinodat, mdl, scale = "logit", dim_reduction = "PCA")
   
   # tuning
   set.seed(2)
@@ -35,7 +35,7 @@ test_that("final model output can be plotted", {
   )
   
   # r squared plot
-  ggfit(final, abbreviate_vars(parms), selected = "t")
+  ggfit(final, abbreviate_vars(parms), selected = "t", preprocessor = "logit")
   
   # map projection
   base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
@@ -46,3 +46,39 @@ test_that("final model output can be plotted", {
   ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
 })
 
+test_that("final model output can be plotted without tuning", {
+  
+  set.seed(1)
+  # resample
+  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  
+  # model
+  mdl <- parsnip::linear_reg() |>
+    parsnip::set_engine('lm') |>
+    parsnip::set_mode('regression')
+  
+  # workflow
+  wfl <- transferice_workflow(dinodat, mdl)
+
+  final <- tune::last_fit(
+    wfl,
+    split =  splt,
+    metrics = 
+      yardstick::metric_set(
+        transferice::rmsre, 
+        yardstick::rmse, 
+        yardstick::rsq
+      )
+  )
+  
+  # r squared plot
+  ggfit(final, abbreviate_vars(parms), selected = "t")
+  
+  # map projection
+  base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
+    oceanexplorer::filter_NOAA(depth = 0) |>
+    stars::st_warp(crs = 4326) |>
+    stars::st_downsample(n = 5)
+  
+  ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
+})
