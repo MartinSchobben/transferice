@@ -33,13 +33,16 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
     ttl_reg <- glue::glue('R-squared Plot')
     ttl_spat <- glue::glue("Difference in prediction")
   }
+  
+  # name
   nm <- paste("final", type, preprocessor, selected, averaging, lbl, sep = "_")
-  im_path <- try(
+  # potential path
+  ggpath <- try(
     fs::path_package("transferice", "plots", nm, ext = "png"), 
     silent = TRUE
   )
   
-  if (inherits(im_path, "try-error")) {
+  if (inherits(ggpath, "try-error")) {
   
     # extract predictions
     preds <- tune::collect_predictions(final)

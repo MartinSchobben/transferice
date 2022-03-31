@@ -35,8 +35,7 @@ model_ui <- function(id) {
               selectizeInput(
                 ns("scale"), 
                 "Predictor transforming", 
-                choices = c("center", "logit"), # variance-stabilizing transformations 
-                multiple = TRUE,
+                choices = c("log", "logit", "normalize"), # variance-stabilizing transformations 
                 options = list(
                   placeholder = 'Select to apply',
                   onInitialize = I('function() { this.setValue(null); }')
@@ -81,6 +80,10 @@ model_ui <- function(id) {
           tabsetPanel(
             id = ns("specs"),
             tabPanel(
+              "engineering",
+              imageOutput(ns("eng"))
+            ),
+            tabPanel(
               "tuning",
               imageOutput(ns("part"))
             ),
@@ -117,6 +120,10 @@ model_ui <- function(id) {
             id = ns("results"),
             header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
             tabPanelBody(
+              value = "help"#,
+              # plotOutput(ns("submetrics"))
+            ),
+            tabPanelBody(
               value = "tuning",
               plotOutput(ns("submetrics"))
             ),
@@ -137,49 +144,13 @@ model_ui <- function(id) {
 model_server <- function(id) {
   moduleServer(id, function(input, output, session) {
     
-    dat <- reactive({
-      # for now data is from a local source but later-on it should be sourced 
-      # from the explo-module
-      dinodat
-    })
-    
-    # resample
-    splt <- eventReactive(input$run, {
-      set.seed(1)
-      splt <- rsample::initial_split(dat(), prop = 0.75) 
-    })
-    
-    # model
-    mdl <- eventReactive(input$run, {
-      parsnip::linear_reg() |>
-        parsnip::set_engine('lm') |>
-        parsnip::set_mode('regression')
-    })
-    
-    # workflow
-    wfl <- eventReactive(input$run, {
-      transferice_workflow(
-        dat(), 
-        mdl(), 
-        trans = input$scale, 
-        dim_reduction = input$dims
-      )
-    })
-    
-    # tuning
-    tun <- eventReactive(input$run, {
-      set.seed(2)
-      transferice_tuning_mem(splt(), wfl())
-    })
-    
-    # extract sub-models per fold
-    parts <- reactive({
-      cv_model_extraction_mem(tun())
-    })
+#-------------------------------------------------------------------------------
+# misc elements
+#-------------------------------------------------------------------------------    
     
     # `reactiveValues` to store image path
-    pth <- reactiveValues(part = NULL, fit = NULL)
-
+    pth <- reactiveValues(eng = NULL, part = NULL, fit = NULL)
+    
     # base map (for kriging interpolation)
     base <- reactive({
       # parameter
@@ -191,14 +162,109 @@ model_server <- function(id) {
         stars::st_downsample(n = 5)
     })
 
-    observe(message(glue::glue("{str(input$dims)}")))
+#-------------------------------------------------------------------------------    
+# modelling
+#------------------------------------------------------------------------------- 
+    
+    dat <- reactive({
+      # for now data is from a local source but later-on it should be sourced 
+      # from the explo-module
+      dinodat
+    })
+    
+    # resample
+    splt <- reactive({
+      set.seed(1)
+      splt <- rsample::initial_split(dat(), prop = 0.75) 
+    })
+    
+    # recipe
+    rcp <- reactive({
+      transferice_recipe(
+        dat(), 
+        trans = input$scale, 
+        dim_reduction = input$dims
+      )
+    }) 
+    
+    # model
+    mdl <- reactive({
+      parsnip::linear_reg() |>
+        parsnip::set_engine('lm') |>
+        parsnip::set_mode('regression')
+    })
+    
+    # workflow
+    wfl <- reactive({
+      workflows::workflow() |>
+        workflows::add_recipe(rcp()) |>
+        workflows::add_model(mdl())
+    })
+    
+    # tuning
+    tun <- eventReactive(input$run, {
+      set.seed(2)
+      transferice_tuning_mem(splt(), wfl())
+    })
+    
+    #finalize model
+    final <- eventReactive(input$run, {
+      # no tuning
+      wfl <- wfl()
+      # or inalize workflow by selecting optimal sub-model
+      if (isTruthy(input$comp)) {
+        wfl <- tune::finalize_workflow(
+          wfl,
+          tibble::tibble(num_comp = input$comp)
+        )
+      }
+      # fit the final model
+      tune::last_fit(
+        wfl,
+        split =  splt(),
+        metrics =
+          yardstick::metric_set(
+            transferice::rmsre,
+            yardstick::rmse,
+            yardstick::rsq
+          )
+      )
+    })
+
+#-------------------------------------------------------------------------------
+# generate figures
+#-------------------------------------------------------------------------------
+
+    # feature engineering
+    observe({
+      filename <- ggpartial(
+        obj = splt(),
+        recipe = rcp(),
+        pred = input$peek,
+        tune = input$comp,
+        out = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
+        preprocessor = paste(input$scale, sep = "_")
+      )
+      # save in `reactiveValues`
+      pth$eng <- filename
+
+    })
+    
+    # cross plots
+    output$eng <- renderImage({
+      req(pth$eng)
+      # filename
+      list(src = pth$eng)
+    },
+    deleteFile = FALSE
+    )
     
     # different CV parts (regression)
     observe({
       # regression folds
       filename <- ggpartial(
-        partials = parts(),
-        pred = if (isTruthy(input$comp)) NULL else input$peek,
+        obj = tun(),
+        pred = input$peek,
         tune = input$comp,
         out = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
         type = if (isTruthy(input$toggle))  "spatial" else "regression",
@@ -207,9 +273,9 @@ model_server <- function(id) {
       )
       # save in `reactiveValues`
       pth$part <- filename
-     
+
     })
-    
+
     # CV animations
     output$part <- renderImage({
       req(pth$part)
@@ -218,52 +284,33 @@ model_server <- function(id) {
     },
     deleteFile = FALSE
     )
-    # 
-    # # finalize model
-    # final <- reactive({
-    #   req(input$comp)
-    #   # finalize workflow by selecting optimal sub-model
-    #   final_wfl <- tune::finalize_workflow(
-    #     wfl(),
-    #     tibble::tibble(num_comp = input$comp)
-    #   )
-    #   # fit the final model
-    #   tune::last_fit(
-    #     final_wfl,
-    #     split =  splt(),
-    #     metrics = 
-    #       yardstick::metric_set(
-    #         transferice::rmsre, 
-    #         yardstick::rmse, 
-    #         yardstick::rsq
-    #       )
-    #   )
-    # }) 
-    # 
-    # # final model plotted as R-squared plot
-    # observe({
-    #   # parameter
-    #   pm <- abbreviate_vars(parms)[abbreviate_vars(parms) == input$parm]
-    #   filename <- ggfit(
-    #     final(), 
-    #     abbreviate_vars(parms), 
-    #     selected = pm,
-    #     type = if (isTruthy(input$toggle))  "spatial" else "regression",
-    #     base_map = base(),
-    #     preprocessor = paste(input$scale, sep = "_")
-    #   )
-    #   # save in `reactiveValues`
-    #   pth$final <- filename
-    # })
-    # 
-    # # final model image
-    # output$final <- renderImage({
-    #   req(pth$final)
-    #   # filename
-    #   list(src = pth$final)
-    # },
-    # deleteFile = FALSE
-    # )
+    
+    # final model plotted as R-squared plot
+    observe({
+      # parameter
+      pm <- abbreviate_vars(parms)[abbreviate_vars(parms) == input$parm]
+      filename <- ggfit(
+        final(),
+        abbreviate_vars(parms),
+        selected = pm,
+        type = if (isTruthy(input$toggle))  "spatial" else "regression",
+        base_map = base(),
+        preprocessor = paste(input$scale, sep = "_")
+      )
+      # save in `reactiveValues`
+      pth$final <- filename
+    })
+
+    # final model image
+    output$final <- renderImage({
+      req(pth$final)
+      # filename
+      list(src = pth$final)
+    },
+    deleteFile = FALSE
+    )
+#-------------------------------------------------------------------------------    
+
     # 
     # # side panel (sub) model metrics
     # output$results <- renderText({
@@ -322,8 +369,6 @@ model_server <- function(id) {
     # 
     # render controller based on tuning results
     output$control <- renderUI({
-      # if (length(input$dims) == 0) {
-        
       if (input$dims == "PCA") {
         sliderInput(NS(id, "comp"), "Principal components", 1, 10, 1, ticks = FALSE)
       }

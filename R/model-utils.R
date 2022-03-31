@@ -1,9 +1,10 @@
-transferice_workflow <- function(dat, model, trans = "none", 
-                                 dim_reduction = "none", tunable = TRUE) {
+transferice_recipe <- function(dat, trans = NULL, dim_reduction = NULL, 
+                               tunable = TRUE) {
 
   # parameter names
   pms <- paste0(abbreviate_vars(parms), "_an", collapse = "+")
-  # dinocysts ids
+  
+  # taxa names
   rm <- c(
     paste0(abbreviate_vars(parms), "_an"), 
     "hole_id", 
@@ -11,24 +12,26 @@ transferice_workflow <- function(dat, model, trans = "none",
     "longitude",
     "latitude"
   )
-  dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), collapse = "+")
+  tns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), collapse = "+")
  
   # formula
-  fml <- as.formula(paste0(pms, "~", dns))
+  fml <- as.formula(paste0(pms, "~", tns))
   # recipe
   rcp <- recipes::recipe(fml, data = dat)
   
   # transforming 
-  rcp <- purrr::reduce(trans, transform_predictor, .init = rcp)
+  if (isTruthy(trans)) {
+    rcp <- purrr::reduce(trans, transform_predictor, .init = rcp)
+  }
   
   # dimensions reduction (PCA)
-  if (dim_reduction == "PCA") {
+  if (isTruthy(dim_reduction) && dim_reduction == "PCA") {
     if (isTRUE(tunable)) {
       rcp <- recipes::step_pca(
         rcp,
         recipes::all_predictors(), 
         num_comp = tune::tune()
-        )
+      )
     } else {
       rcp <- recipes::step_pca(
         rcp,
@@ -37,10 +40,7 @@ transferice_workflow <- function(dat, model, trans = "none",
     }
   }
   
-  # workflow
-  workflows::workflow() |>
-    workflows::add_recipe(rcp) |>
-    workflows::add_model(model)
+  rcp
 }
 
 transferice_tuning <- function(split, wfl) {
@@ -96,9 +96,27 @@ print_metric <- function(dat, metric, sig = 1) {
 transform_predictor <- function(rcp, trans) {
   switch(
     trans,
-    logit = recipes::step_logit(rcp, recipes::all_predictors(), offset = 0.025),
-    center = recipes::step_center(rcp, recipes::all_predictors())
+    logit =  step_logit_center(rcp),
+    log = step_log_center(rcp),
+    normalize = step_nz_normalize(rcp) 
   )
+}
+
+# remove near zero varianve before normalizing
+step_nz_normalize <- function(rcp) {
+  recipes::step_nzv(rcp, recipes::all_predictors()) |> 
+    recipes::step_normalize(recipes::all_predictors())
+
+}
+
+step_logit_center <- function(rcp) {
+  recipes::step_logit(rcp, recipes::all_predictors(), offset = 0.025) |>
+    recipes::step_center(recipes::all_predictors())
+}
+
+step_log_center <- function(rcp) {
+  recipes::step_log(rcp, recipes::all_predictors(), offset = 0.025) |>
+    recipes::step_center(recipes::all_predictors())
 }
 
 # control resample of model fit

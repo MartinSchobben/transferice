@@ -4,7 +4,15 @@
 \alias{ggfit}
 \title{R squared plot}
 \usage{
-ggfit(final, parms, averaging = "an", selected = "all")
+ggfit(
+  final,
+  parms,
+  averaging = "an",
+  selected = "all",
+  type = "regression",
+  base_map = NULL,
+  preprocessor = NULL
+)
 }
 \arguments{
 \item{final}{}
