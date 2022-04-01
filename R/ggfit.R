@@ -1,41 +1,37 @@
-#' R squared plot
-#'
-#' @param final 
-#' @param parms 
-#' @param averaging 
-#' @param selected 
-#'
-#' @return
+#' @rdname ggpartial
+#' 
 #' @export
-#'
-ggfit <- function(final, parms, averaging = "an", selected = "all", 
-                  type = "regression", base_map = NULL, preprocessor = NULL) {
+ggpartial.last_fit <- function(
+    obj, 
+    recipe = NULL, 
+    pred = NULL, 
+    tune = NULL, 
+    out, 
+    type = "regression",
+    base_map = NULL,
+    preprocessor = NULL
+    ) {
+  
+  # predictor variable
+  x <- pred_check(obj, pred, tune)
+  
+  # outcome variable
+  y <- rlang::ensym(out) 
+  
+  # extract averaging
+  averaging <- gsub("^(.)*_", "", as_name(y))
 
   # parameter of interest
-  pm <- paste(selected, averaging, sep = "_") 
+  pm <- as_name(y)
   # all parameters
-  pms <- paste(parms, averaging, sep = "_") 
-  
-  # number of components used for prediction
-  mold <- final$.workflow[[1]] |> workflows::extract_mold()
-  n_comps <- ncol(mold$predictors) # dimensions after processing
-  n_preds <- mold$blueprint$recipe$var_info |>  # dimensions original
-    dplyr::filter(role == "predictor") |> 
-    nrow()
+  pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
   
   # name file, plot title and potential path
-  if (n_preds > n_comps) {
-    lbl <- paste0("PC", n_comps) 
-    ttl_reg <- glue::glue('R-squared Plot (# {n_comps} components)')
-    ttl_spat <- glue::glue("Difference in prediction (# {n_comps} components)")
-  } else {
-    lbl <- n_preds
-    ttl_reg <- glue::glue('R-squared Plot')
-    ttl_spat <- glue::glue("Difference in prediction")
-  }
+  ttl_reg <- paste('R-squared Plot', x)
+  ttl_spat <- paste("Difference in prediction", x)
   
   # name
-  nm <- paste("final", type, preprocessor, selected, averaging, lbl, sep = "_")
+  nm <- paste("final", type, preprocessor, pm, x, sep = "_")
   # potential path
   ggpath <- try(
     fs::path_package("transferice", "plots", nm, ext = "png"), 
@@ -45,11 +41,12 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
   if (inherits(ggpath, "try-error")) {
   
     # extract predictions
-    preds <- tune::collect_predictions(final)
+    preds <- tune::collect_predictions(obj)
     
     if (type == "spatial") {
+      
       # original data
-      origin <- dplyr::transmute(final, origin = purrr::map(splits, rsample::testing)) |> 
+      origin <- dplyr::transmute(obj, origin = purrr::map(splits, rsample::testing)) |> 
         tidyr::unnest(cols = c(origin))
       # predictions
       output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
@@ -61,7 +58,7 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
       names(z) = pm # rename
       
       # label
-      lbl <- oceanexplorer::env_parm_labeller(selected, prefix = "Delta")
+      lbl <- oceanexplorer::env_parm_labeller(as_name(y), prefix = "Delta")
       
       # plot (suppres waqrning of replacing fill scale)
       p <- oceanexplorer::plot_NOAA(z) +
@@ -71,29 +68,29 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
     } else if (type == "regression") {
   
       # rename original true values
-      final <- dplyr::rename_with(
+      obj <- dplyr::rename_with(
         preds, 
         .cols = dplyr::any_of(pms), 
         .fn = ~paste0(".truth_", .x)
       )
       
       # pivot to long format
-      long_final <-tidyr::pivot_longer(
-          final,
+      long_obj <-tidyr::pivot_longer(
+          obj,
           cols = dplyr::ends_with(paste0("_", averaging)),
           names_to = c(".value", "parameter"),
           names_pattern = paste0("(.*)_(._", averaging ,")")
         )
       
-      if (selected != "all")  {
+      # if (selected != "all")  {
         # check if param exists
-        chk <- pm %in% unique(long_final$parameter)
+        chk <- pm %in% unique(long_obj$parameter)
         if (!chk) stop("Selected parameter does not exist in data.", call. = FALSE)
-        long_final <- dplyr::filter(long_final,  .data$parameter ==  pm)
-      }
+        long_obj <- dplyr::filter(long_obj,  .data$parameter ==  pm)
+      # }
     
       p <- ggplot2::ggplot(
-        long_final, 
+        long_obj, 
         ggplot2::aes(x = .data$.truth, y = .data$.pred)
         ) +  
         ggplot2::geom_point() +  
@@ -104,11 +101,11 @@ ggfit <- function(final, parms, averaging = "an", selected = "all",
           x = 'Actual'
         )
       
-      if (selected == "all") {
-        p <- p + ggplot2::facet_wrap(ggplot2::vars(parameter), scales = "free") 
-      } else {
-        p <- p
-      }
+      # if (selected == "all") {
+      #   p <- p + ggplot2::facet_wrap(ggplot2::vars(parameter), scales = "free") 
+      # } else {
+      #   p <- p
+      # }
     }
     
     # save plot

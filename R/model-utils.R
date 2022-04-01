@@ -78,6 +78,27 @@ transferice_tuning <- function(split, wfl) {
   }
 }
 
+transferice_finalize <- function(split, wfl, dial = NULL) {
+  
+  # finalize workflow by selecting optimal sub-model (if tuned)
+  if (isTruthy(dial)) {
+    wfl <- tune::finalize_workflow(
+      wfl,
+      tibble::tibble(num_comp = dial)
+    )
+  }
+  
+  # metrics to return
+  mts <- yardstick::metric_set(
+    transferice::rmsre,
+    yardstick::rmse,
+    yardstick::rsq
+  )
+  
+  # fit the final model (does not need to be tuned)
+  tune::last_fit(wfl, split = split, metrics = mts)
+}
+
 # memoise function
 transferice_tuning_mem <- memoise::memoise(
   transferice_tuning, 

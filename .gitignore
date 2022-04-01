@@ -6,7 +6,6 @@
 .httr-oauth
 .Renviron
 .DS_Store
-.Rdata
 
 # derived filetypes
 /**/*.gif

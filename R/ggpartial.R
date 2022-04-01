@@ -21,23 +21,24 @@ ggpartial.mc_split <- function(
     pred = NULL, 
     tune = NULL, 
     out, 
-    type = "point",
+    type = "regression",
     preprocessor = NULL
   ) {
 
-  # fallback for no supplied tune with a tuning recipe
-  n_depth <- length(recipe$steps)
-  comps <- purrr::pluck(recipe, "steps", n_depth, "num_comp") 
-  if (inherits(comps, "call")) {
-    if(!isTruthy(tune)) tune <- 1 ; pred <- NULL # supply if not available 
-    purrr::pluck(recipe, "steps", n_depth, "num_comp") <- tune # replace tuning parameter
-  }
-
   # predictor variable
-  x <- pred_check(pred, tune)
+  x <- pred_check(recipe, pred, tune)
   
   # outcome variable
   y <- rlang::ensym(out) 
+  
+  # fallback for no supplied tune with a tuned recipe
+  dls <- hardhat::extract_parameter_set_dials(recipe)
+  if (nrow(dls) > 0) {
+    depth_dial <- length(recipe$steps) # depth of dial
+    name_dial <- dls$name # name of dial
+    # replace tuning parameter with fixed parameter based on `tune`
+    purrr::pluck(recipe, "steps", depth_dial, name_dial) <- tune 
+  }
   
   # split object for training recipe
   cast <- recipes::prep(recipe, training = rsample::training(obj)) |> 
@@ -73,8 +74,8 @@ ggpartial.mc_split <- function(
       fs::path(nm, ext = "png"),
       plot = p, 
       path = fs::path_package(package = "transferice", "plots"),
-      width = if (type == "point") 400 else 600,
-      height = if (type == "point") 400 else 300,
+      width = if (type == "regression") 400 else 600,
+      height = if (type == "regression") 400 else 300,
       dpi = 72,
       units = "px"
     )
@@ -89,6 +90,7 @@ ggpartial.mc_split <- function(
 #' @export
 ggpartial.tune_results <- function(
     obj, 
+    recipe = NULL,
     pred = NULL, 
     tune = NULL, 
     out, 
@@ -102,7 +104,7 @@ ggpartial.tune_results <- function(
   partials <- cv_model_extraction_mem(obj)
   
   # predictor variable
-  x <- pred_check(pred, tune)
+  x <- pred_check(obj, pred, tune)
 
   # outcome variable
   y <- rlang::enquo(out) 
@@ -113,21 +115,10 @@ ggpartial.tune_results <- function(
                 "`type` = 'spatial'."), call. = FALSE)
   }
   
-  # filter tune parameter setting
-  # if (isTruthy(tune)) {
-  
-  tryCatch({
-    partials <- dplyr::filter(partials, .data$num_comp == tune)
-  }, 
-  error = function(e) e,
-  finally = {
-    partials 
-    x <- rlang::ensym(pred) 
-  })
-   
-  # }
-  
-    
+  # check if tuned then subset num_comp
+  trytune <- try(dplyr::filter(dat, .data$num_comp), silent = TRUE)
+  if (!inherits(trytune, "try-error")) partials <- trytune
+
   # predicted values
   output <- dplyr::transmute(
     partials, 
@@ -285,14 +276,67 @@ ggpartial.tune_results <- function(
 
 # predictor check
 # predictor variable (either for tuning or just inspection)
-pred_check <- function(pred, tune) {
-  if (isTruthy(tune)) {
-    x <- rlang::sym(paste0("PC", tune))
-  } else if (isTruthy(pred) & !isTruthy(tune)) {
-    x <- rlang::ensym(pred) 
-  } else {
-    stop("Either `pred` or `tune` needs to be supplied", call. = FALSE)
+pred_check <- function(dat, pred, tune) {
+  
+  if (!isTruthy(pred) & !isTruthy(tune)) {
+    stop(paste("Either `pred` or `tune` needs to be supplied!"), call. = FALSE)
   }
+  
+  if (inherits(dat, "recipe")) {
+    # check if recipe has tune dials
+    dls <- hardhat::extract_parameter_set_dials(dat)$name
+    if (length(dls) == 0 & !isTruthy(pred)) {
+      stop(paste("The model has NOT been tuned and therefore `pred` needs to be", 
+                 "supplied!"), call. = FALSE)    
+    } else  if (length(dls) == 0 & isTruthy(pred)) {
+      x <- rlang::ensym(pred) 
+    } else if (length(dls) > 0 & !isTruthy(tune)) {
+      stop(paste("The model has been tuned and therefore `tune` needs to be", 
+                 "supplied!"), call. = FALSE)
+    } else if (length(dls) > 0 & isTruthy(tune)) {
+      x <- rlang::sym(paste0("PC", tune))
+    }
+    
+  }
+  
+  if (inherits(dat, "tune_results")) {
+    
+    if (inherits(dat, "last_fit")) {
+      
+      # number of components used for prediction
+      mold <- dat$.workflow[[1]] |> 
+        workflows::extract_mold()
+      n_comps <- ncol(mold$predictors) # dimensions after processing
+      n_preds <- mold$blueprint$recipe$var_info |>  # dimensions original
+        dplyr::filter(role == "predictor") |> 
+        nrow()
+      
+      if (n_preds == n_comps) {
+        x <- NULL # nothing to return
+      } else if (n_preds > n_comps) {
+        x <- paste0(n_comps, "PCs") # return number of components tuning
+      }
+      
+    } else {
+    
+      # check if results are tuned (class 'resample_results' is not tuned)
+      nottuned <- inherits(dat, 'resample_results')
+      
+      if (nottuned & !isTruthy(pred)) {
+        stop(paste("The model has NOT been tuned and therefore `pred` needs to be", 
+                   "supplied!"), call. = FALSE)    
+      } else  if (nottuned & isTruthy(pred)) {
+        x <- rlang::ensym(pred) 
+      } else if (!nottuned & !isTruthy(tune)) {
+        stop(paste("The model has been tuned and therefore `tune` needs to be", 
+                   "supplied!"), call. = FALSE)
+      } else if (!nottuned& isTruthy(tune)) {
+        x <- rlang::sym(paste0("PC", tune))
+      }
+    }
+  }
+  
+  # return
   x
 }
 

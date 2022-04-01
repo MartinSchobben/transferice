@@ -10,6 +10,13 @@ model_ui <- function(id) {
   # elements
   tagList(
     
+    # use shinyjs
+    shinyjs::useShinyjs(), 
+    # shinyjs::inlineCSS(css),
+    
+    # waiter
+    waiter::use_waiter(),
+    
     # Application title
     titlePanel("Training transfer functions"),
 
@@ -67,8 +74,11 @@ model_ui <- function(id) {
             ),
             footer = tagList(
               tags$br(), 
-              tags$br(), 
-              actionButton(ns("run"), "Run model")
+              tags$br(),
+              fluidRow(
+                column(6, actionButton(ns("reset"), "Reset model")),
+                column(6, actionButton(ns("run"), "Train model"))
+              )
             )
           )
         )
@@ -93,17 +103,25 @@ model_ui <- function(id) {
             ),
             header = tagList(
               tags$br(),
-              fixedRow(
+              fluidRow(
+                column(4,
                 selectInput(
                   ns("parm"), 
                   "Parameter selection", 
                   choices = abbreviate_vars(parms)
-                ),
+                )),
+                column(4,
+                selectInput(
+                  ns("temp"), 
+                  "Averaging period", 
+                  choices = temp
+                )),
+                column(4,
                 selectInput(
                   ns("peek"), 
                   "Taxa selection",
                   choices = species_naming(pool)
-                )
+                ))
               )
             ),
             footer = shinyWidgets::materialSwitch(
@@ -149,7 +167,10 @@ model_server <- function(id) {
 #-------------------------------------------------------------------------------    
     
     # `reactiveValues` to store image path
-    pth <- reactiveValues(eng = NULL, part = NULL, fit = NULL)
+    file <- reactiveValues(path = NULL)
+    
+    # selected parameter
+    pm <- reactive({rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_"))})
     
     # base map (for kriging interpolation)
     base <- reactive({
@@ -160,6 +181,17 @@ model_server <- function(id) {
         oceanexplorer::filter_NOAA(depth = 0) |>
         stars::st_warp(crs = 4326) |>
         stars::st_downsample(n = 5)
+    })
+    
+    # enable disable tabs based on whether run model has been clicked
+    # https://stackoverflow.com/questions/64324152/shiny-disable-tabpanel-using-shinyjs?noredirect=1&lq=1
+    observe({
+      shinyjs::disable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
+    })
+    observeEvent(input$run, {
+      shinyjs::enable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::enable(selector = '.nav-tabs a[data-value="validation"')
     })
 
 #-------------------------------------------------------------------------------    
@@ -172,7 +204,7 @@ model_server <- function(id) {
       dinodat
     })
     
-    # resample
+    # re-sample
     splt <- reactive({
       set.seed(1)
       splt <- rsample::initial_split(dat(), prop = 0.75) 
@@ -180,11 +212,7 @@ model_server <- function(id) {
     
     # recipe
     rcp <- reactive({
-      transferice_recipe(
-        dat(), 
-        trans = input$scale, 
-        dim_reduction = input$dims
-      )
+      transferice_recipe(dat(), trans = input$scale, dim_reduction = input$dims)
     }) 
     
     # model
@@ -203,112 +231,59 @@ model_server <- function(id) {
     
     # tuning
     tun <- eventReactive(input$run, {
+      # waiter
+      waiter <- waiter::Waiter$new()
+      waiter$show()
+      on.exit(waiter$hide())
+      # tuning
       set.seed(2)
       transferice_tuning_mem(splt(), wfl())
     })
     
-    #finalize model
+    # finalize model (with or without tuning)
     final <- eventReactive(input$run, {
-      # no tuning
-      wfl <- wfl()
-      # or inalize workflow by selecting optimal sub-model
-      if (isTruthy(input$comp)) {
-        wfl <- tune::finalize_workflow(
-          wfl,
-          tibble::tibble(num_comp = input$comp)
-        )
-      }
-      # fit the final model
-      tune::last_fit(
-        wfl,
-        split =  splt(),
-        metrics =
-          yardstick::metric_set(
-            transferice::rmsre,
-            yardstick::rmse,
-            yardstick::rsq
-          )
-      )
+      transferice_finalize(splt(), wfl(), input$comp)
     })
 
 #-------------------------------------------------------------------------------
 # generate figures
 #-------------------------------------------------------------------------------
 
-    # feature engineering
+    # feature engineering and training
     observe({
-      filename <- ggpartial(
-        obj = splt(),
+      # waiter
+      waiter <- waiter::Waiter$new()
+      waiter$show()
+      on.exit(waiter$hide())
+      # initial split or fitted/tuned data
+      if (input$specs == "engineering") {
+        dat <- splt() 
+      } else if (input$specs == "tuning") {
+        dat <- tun()
+      } else if (input$specs == "validation") {
+        dat <- final()
+      }
+      # tuned data requires a dimension variable selection
+      if (isTruthy(input$dims))  req(input$comp)
+      # create plot or animation (save in `reactiveValues`)
+      file$path <- ggpartial(
+        obj = dat,
         recipe = rcp(),
         pred = input$peek,
         tune = input$comp,
-        out = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
+        out = !! pm(),
+        type = if (isTruthy(input$toggle))  "spatial" else "regression",
         preprocessor = paste(input$scale, sep = "_")
       )
-      # save in `reactiveValues`
-      pth$eng <- filename
-
     })
-    
+
     # cross plots
-    output$eng <- renderImage({
-      req(pth$eng)
-      # filename
-      list(src = pth$eng)
-    },
-    deleteFile = FALSE
-    )
-    
-    # different CV parts (regression)
-    observe({
-      # regression folds
-      filename <- ggpartial(
-        obj = tun(),
-        pred = input$peek,
-        tune = input$comp,
-        out = !!rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_")),
-        type = if (isTruthy(input$toggle))  "spatial" else "regression",
-        base_map = base(),
-        preprocessor = paste(input$scale, sep = "_")
-      )
-      # save in `reactiveValues`
-      pth$part <- filename
-
-    })
-
+    output$eng <- renderImage(list(src = file$path), deleteFile = FALSE)
     # CV animations
-    output$part <- renderImage({
-      req(pth$part)
-      # filename
-      list(src = pth$part)
-    },
-    deleteFile = FALSE
-    )
-    
-    # final model plotted as R-squared plot
-    observe({
-      # parameter
-      pm <- abbreviate_vars(parms)[abbreviate_vars(parms) == input$parm]
-      filename <- ggfit(
-        final(),
-        abbreviate_vars(parms),
-        selected = pm,
-        type = if (isTruthy(input$toggle))  "spatial" else "regression",
-        base_map = base(),
-        preprocessor = paste(input$scale, sep = "_")
-      )
-      # save in `reactiveValues`
-      pth$final <- filename
-    })
-
+    output$part <- renderImage(list(src = file$path), deleteFile = FALSE)
     # final model image
-    output$final <- renderImage({
-      req(pth$final)
-      # filename
-      list(src = pth$final)
-    },
-    deleteFile = FALSE
-    )
+    output$final <- renderImage(list(src = file$path), deleteFile = FALSE)
+    
 #-------------------------------------------------------------------------------    
 
     # 

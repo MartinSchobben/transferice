@@ -9,33 +9,19 @@ test_that("final model output can be plotted with tuning", {
     parsnip::set_engine('lm') |>
     parsnip::set_mode('regression')
   
+  # recipe
+  rcp <- transferice_recipe(dinodat, trans = "logit", dim_reduction = "PCA")
+  
   # workflow
-  wfl <- transferice_workflow(dinodat, mdl, scale = "logit", dim_reduction = "PCA")
-  
-  # tuning
-  set.seed(2)
-  tuned_cv <- transferice_tuning(splt, wfl)
-  
-  xc <- cv_model_extraction(tuned_cv)
-  
-  final_wfl <- tune::finalize_workflow(
-    wfl,
-    tibble::tibble(num_comp = 2)
-  )
-  
-  final <- tune::last_fit(
-    final_wfl,
-    split =  splt,
-    metrics = 
-      yardstick::metric_set(
-        transferice::rmsre, 
-        yardstick::rmse, 
-        yardstick::rsq
-      )
-  )
+  wfl <- workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
+    workflows::add_model(mdl)
+
+  # final fit
+  final <- transferice_finalize(splt, wfl, 3)
   
   # r squared plot
-  ggfit(final, abbreviate_vars(parms), selected = "t", preprocessor = "logit")
+  ggpartial(final, tune = 1, out = t_an, preprocessor = "logit")
   
   # map projection
   base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
@@ -57,22 +43,19 @@ test_that("final model output can be plotted without tuning", {
     parsnip::set_engine('lm') |>
     parsnip::set_mode('regression')
   
+  # recipe
+  rcp <- transferice_recipe(dinodat, trans = "logit")
+  
   # workflow
-  wfl <- transferice_workflow(dinodat, mdl)
-
-  final <- tune::last_fit(
-    wfl,
-    split =  splt,
-    metrics = 
-      yardstick::metric_set(
-        transferice::rmsre, 
-        yardstick::rmse, 
-        yardstick::rsq
-      )
-  )
+  wfl <- workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
+    workflows::add_model(mdl)
+  
+  # final fit
+  final <- transferice_finalize(splt, wfl)
   
   # r squared plot
-  ggfit(final, abbreviate_vars(parms), selected = "t")
+  ggpartial(final, pred = "1", out = t_an, preprocessor = "logit")
   
   # map projection
   base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
@@ -81,4 +64,30 @@ test_that("final model output can be plotted without tuning", {
     stars::st_downsample(n = 5)
   
   ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
+})
+
+test_that("variable check with tuning", {
+  
+  set.seed(1)
+  # resample
+  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  
+  # model
+  mdl <- parsnip::linear_reg() |>
+    parsnip::set_engine('lm') |>
+    parsnip::set_mode('regression')
+  
+  # recipe
+  rcp <- transferice_recipe(dinodat, trans = "logit", dim_reduction = "PCA")
+  
+  # workflow
+  wfl <- workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
+    workflows::add_model(mdl)
+  
+  # final fit
+  final <- transferice_finalize(splt, wfl, 3)
+  
+  pred_check(final, NULL, 1)
+  
 })
