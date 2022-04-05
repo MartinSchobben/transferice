@@ -20,6 +20,7 @@
 /**/*.nc
 /**/*.html
 /**/*.svg
+/**/*.mkv
 
 # documentation
 inst/doc

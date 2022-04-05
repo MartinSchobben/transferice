@@ -1,7 +1,13 @@
 test_that("partial regressions can be plotted with tuning", {
   
-  set.seed(1)
+  # partial map projection
+  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
+    oceanexplorer::filter_NOAA(depth = 0) |> 
+    stars::st_warp(crs = 4326) |> 
+    stars::st_downsample(n = 5)
+  
   # resample
+  set.seed(1)
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipe
@@ -11,6 +17,13 @@ test_that("partial regressions can be plotted with tuning", {
   vdiffr::expect_doppelganger(
     "feature engineering",
     ggpartial(splt, rcp, tune = 1, out = t_an, preprocessor = "logit")
+  )
+  
+  # inspect feature engineering (on map)
+  vdiffr::expect_doppelganger(
+    "feature engineering",
+    ggpartial(splt, rcp, tune = 1, out = n_an, type = "spatial", 
+              base_map = base, preprocessor = "logit")
   )
   
   # what happens if `pred` is supplied with a tuned recipe?
@@ -38,12 +51,6 @@ test_that("partial regressions can be plotted with tuning", {
     "partial regression",
     ggpartial(tuned_cv, tune = 1, out = t_an, plot_type = "static")
   )
-  
-  # partial map projection
-  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
-    oceanexplorer::filter_NOAA(depth = 0) |> 
-    stars::st_warp(crs = 4326) |> 
-    stars::st_downsample(n = 5)
   
   vdiffr::expect_doppelganger(
     "partial spatial",

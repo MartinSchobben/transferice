@@ -1,12 +1,23 @@
 #' ggpartial
 #' 
-#' partial conditional regression for trained model on test data
+#' This function plots several aspect of the machine learning workflow. 
 #'
-#' @param obj Rsample mc_split object or tune tune_results object
-#' @param x x variable
-#' @param y y variable
+#'  - Feature engineering for subsets of variables of the data. 
+#'  - Partial conditional regression for trained models on the test data split. 
+#'  - R squared plot for the final fit on all variables.
 #'
-#' @return
+#' @param obj Rsample mc_split object or tune tune_results object.
+#' @param recipe Recipe for feature engineering (recipe object).
+#' @param pred Predictor variable (character string).
+#' @param tune Tune variable (character or numeric string).
+#' @param out Outcome variable (character or symbol).
+#' @param type Plot output type. "Regression" for a simple scatter plot with a 
+#'  regression line. "Spatial" for a projection on a global map.
+#' @param preprocessor Character string detailing the engineering steps.
+#'
+#' @return A \code{ggplot2:\link[ggplot2:ggplot()]{ggplot}} or pathway to a plot 
+#'  or animation.
+#' 
 #' 
 #' @export
 ggpartial <- function(obj, ...) { 
@@ -22,6 +33,7 @@ ggpartial.mc_split <- function(
     tune = NULL, 
     out, 
     type = "regression",
+    base_map = NULL, 
     preprocessor = NULL
   ) {
 
@@ -57,7 +69,9 @@ ggpartial.mc_split <- function(
   if (inherits(ggpath, "try-error")) {
     
     # plot y-axis label for the predicted values
-    y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
+    y_lbl <- oceanexplorer::env_parm_labeller(
+      gsub("_.*$", "", rlang::as_name(y))
+    )
     
     if (!isTruthy(pred) & !isTruthy(preprocessor)) {
       x_lbl <- paste0(preprocessor, "(", as_name(x), ")")
@@ -65,9 +79,43 @@ ggpartial.mc_split <- function(
       x_lbl <- as_name(x)
     }
     
-    # plot
-    p <- ggbase(cast, x, y, id = FALSE)  + 
-      ggplot2::labs(title = 'Feature engineering', y = y_lbl, x = x_lbl)
+    if (type == "spatial") {
+      
+      # get coordinates and turn into sf object
+      spat <- tibble::as_tibble(obj) |> 
+        dplyr::select(.data$longitude, .data$latitude)
+      cast <- dplyr::bind_cols(spat, cast) |> 
+        sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) 
+      
+      # plot
+      p <- oceanexplorer::plot_NOAA(
+        base_map,
+        rng = range(base_map[[1]], na.rm = TRUE)
+      ) +
+        ggplot2::geom_sf(
+          data= cast,
+          # discretise abundance data
+          mapping = ggplot2::aes(
+            color = 
+              ggplot2::cut_interval(
+                .data[[!!x]], 
+                3, 
+                labels = c("low", "mid", "high")
+              )
+            )
+        ) +
+        ggplot2::scale_color_manual(
+          as_name(x), 
+          values = c("white", "grey", "black")
+        )
+      
+    } else if (type == "regression") {
+    
+      # plot
+      p <- ggbase(cast, x, y, id = FALSE)  + 
+        ggplot2::labs(title = 'Feature engineering', y = y_lbl, x = x_lbl)
+    
+    }
     
     # saving
     ggplot2::ggsave(
@@ -97,7 +145,9 @@ ggpartial.tune_results <- function(
     type = "regression", 
     base_map = NULL, 
     plot_type =  "dynamic", 
-    preprocessor = NULL
+    preprocessor = NULL,
+    mc_cores = 4,
+    renderer = "mkv"
   ) {
   
   # memoised partials function
@@ -116,7 +166,7 @@ ggpartial.tune_results <- function(
   }
   
   # check if tuned then subset num_comp
-  trytune <- try(dplyr::filter(dat, .data$num_comp), silent = TRUE)
+  trytune <- try(dplyr::filter(partials, .data$num_comp == tune), silent = TRUE)
   if (!inherits(trytune, "try-error")) partials <- trytune
 
   # predicted values
@@ -134,13 +184,14 @@ ggpartial.tune_results <- function(
   lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
   
   # name file 
-  nm <- paste("folds", type, preprocessor, rlang::as_name(y), rlang::as_name(x), sep = "_")
+  nm <- paste("folds", type, preprocessor, rlang::as_name(y), rlang::as_name(x), 
+              sep = "_")
   
   # potential paths
   if (plot_type == "dynamic") {
     
     ggpath <- try(
-      fs::path_package("transferice", "anims", nm, ext = "gif"), 
+      fs::path_package("transferice", "www", nm, ext = renderer), 
       silent = TRUE
     )
     
@@ -165,17 +216,16 @@ ggpartial.tune_results <- function(
       ) 
   
       # spatial interpolation for each fold
-      z <- dplyr::bind_cols(origin, output) |> 
-        dplyr::mutate(
-          z = 
-            purrr::map2(
-              .data$origin, 
-              .data$.output, 
-              ~interpolate_model(.x, .y, y = !!y, base_map = base_map)
-            )
-        )
+      # make parallel
+      z <- parallel::mcMap(
+        interpolate_model, 
+        origin = origin$origin, 
+        output = output$.output, 
+        MoreArgs = rlang::inject(list(y = !!y, base_map = base_map)),
+        mc.cores = mc_cores 
+      )
   
-      st <- rlang::inject(c(!!!z$z, nms = z$id)) # combine and rename
+      st <- rlang::inject(c(!!!z, nms = output$id)) # combine and rename
       st = merge(st) # collapse to dimension
       names(st) = rlang::as_name(y) # rename
         
@@ -219,20 +269,30 @@ ggpartial.tune_results <- function(
         
       }
     
+      # choose renderer 
+      if (renderer == "gif") {
+        renderer_fn <- gganimate::magick_renderer() 
+      } else if (renderer == "mkv") {
+        renderer_fn <- gganimate::av_renderer(fs::path(nm, ext = renderer))
+      } else {
+        stop("Unkown renderer.", call. = FALSE)
+      }
+      
         # render
         p <- rlang::inject(
           gganimate::animate(
             p, 
-            renderer = gganimate::magick_renderer(),
+            renderer =  renderer_fn,
             !!! pms
           )
         )
       
         # saving
         gganimate::anim_save(
-          fs::path(nm, ext = "gif"), 
+          fs::path(nm, ext = renderer), 
+          fps = 3,
           animation = p, 
-          path = fs::path_package(package = "transferice", "anims")
+          path = fs::path_package(package = "transferice", "www")
         )
         
     } else if (plot_type == "static") {
@@ -269,7 +329,7 @@ ggpartial.tune_results <- function(
     
   } else if (plot_type == "dynamic") {
     
-    fs::path_package("transferice", "anims", nm, ext = "gif")  
+    fs::path_package("transferice", "www", nm, ext = renderer)  
     
   }
 }
@@ -323,8 +383,8 @@ pred_check <- function(dat, pred, tune) {
       nottuned <- inherits(dat, 'resample_results')
       
       if (nottuned & !isTruthy(pred)) {
-        stop(paste("The model has NOT been tuned and therefore `pred` needs to be", 
-                   "supplied!"), call. = FALSE)    
+        stop(paste("The model has NOT been tuned and therefore `pred` needs to", 
+                   " be supplied!"), call. = FALSE)    
       } else  if (nottuned & isTruthy(pred)) {
         x <- rlang::ensym(pred) 
       } else if (!nottuned & !isTruthy(tune)) {
@@ -340,40 +400,6 @@ pred_check <- function(dat, pred, tune) {
   x
 }
 
-
-cv_model_extraction <- function(tuned_cv) {
-  dplyr::select(tuned_cv, .data$splits, .data$id, .data$.extracts) |> 
-    tidyr::unnest(cols = c(.data$.extracts)) |>
-    dplyr::select(-.data$.config) |> 
-    dplyr::mutate(
-      .input = purrr::map(.data$.extracts, ~bind_partials(.x))
-    )
-}
-
-calc_partials <- function(model, newdat, x, y) {
-  x <- rlang::enquo(x)
-  y <- rlang::enquo(y)
-  dplyr::mutate(
-    newdat, 
-    dplyr::across(-c(.data[[!!x]], .data[[!!y]]), mean, na.rm = TRUE)
-  ) |> 
-    predict(object = model)
-}
-
-bind_partials <- function(fold) {
-  dplyr::bind_cols(
-    fold$fit$model[[1]], 
-    fold$fit$model[,-1, drop = FALSE]
-  )  
-}
-
-# memoise function
-cv_model_extraction_mem <- memoise::memoise(
-  cv_model_extraction, 
-  cache = cachem::cache_disk(
-    fs::path_package(package = "transferice", "appdir")
-  )
-)
 
 # base ggplot
 ggbase <- function(dat, x, y, id = TRUE) {

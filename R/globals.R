@@ -1,4 +1,4 @@
-# close connection on exit
-onStop(function() {
-  pool::poolClose(pool)
-})
+# # close connection on exit
+# onStop(function() {
+#   pool::poolClose(pool)
+# })

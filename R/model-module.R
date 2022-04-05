@@ -95,7 +95,9 @@ model_ui <- function(id) {
             ),
             tabPanel(
               "tuning",
-              imageOutput(ns("part"))
+              #uiOutput(ns("part"))
+              tags$video(src = 'folds_regression__t_an_1.mkv', controls = "controls")
+              #imageOutput(ns("part"))
             ),
             tabPanel(
               "validation",
@@ -105,23 +107,26 @@ model_ui <- function(id) {
               tags$br(),
               fluidRow(
                 column(4,
-                selectInput(
-                  ns("parm"), 
-                  "Parameter selection", 
-                  choices = abbreviate_vars(parms)
-                )),
+                  selectInput(
+                    ns("parm"), 
+                    "Parameter selection", 
+                    choices = abbreviate_vars(parms)
+                  )
+                  ),
                 column(4,
-                selectInput(
-                  ns("temp"), 
-                  "Averaging period", 
-                  choices = temp
-                )),
+                  selectInput(
+                    ns("temp"), 
+                    "Averaging period", 
+                    choices = temp
+                  )
+                ),
                 column(4,
-                selectInput(
-                  ns("peek"), 
-                  "Taxa selection",
-                  choices = species_naming(pool)
-                ))
+                  selectInput(
+                    ns("peek"), 
+                    "Taxa selection",
+                    choices = species_naming(pool)
+                  )
+                )
               )
             ),
             footer = shinyWidgets::materialSwitch(
@@ -273,6 +278,7 @@ model_server <- function(id) {
         tune = input$comp,
         out = !! pm(),
         type = if (isTruthy(input$toggle))  "spatial" else "regression",
+        base_map = base(),
         preprocessor = paste(input$scale, sep = "_")
       )
     })
@@ -280,7 +286,21 @@ model_server <- function(id) {
     # cross plots
     output$eng <- renderImage(list(src = file$path), deleteFile = FALSE)
     # CV animations
-    output$part <- renderImage(list(src = file$path), deleteFile = FALSE)
+    observe(message(glue::glue("{file.exists('folds_regression__t_an_1.mkv')}")))
+    #output$part <- renderImage(list(src = file$path), deleteFile = FALSE)
+    output$part  <- renderUI({
+      tags$video(src = 'folds_regression__t_an_1.mkv', controls = "controls")
+      # tags$iframe(
+      #   width ="560",
+      #   height ="315",
+      #   seamless="seamless",
+      #   src = 'folds_regression__t_an_1.mkv',
+      #   frameborder = "0",
+      #   allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture",
+      #   allowfullscreen = NA
+      # )
+    })
+    observe(message(glue::glue("{fs::path_file(file$path)}")))
     # final model image
     output$final <- renderImage(list(src = file$path), deleteFile = FALSE)
     
