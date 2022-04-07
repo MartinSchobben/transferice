@@ -12,8 +12,7 @@ model_ui <- function(id) {
     
     # use shinyjs
     shinyjs::useShinyjs(), 
-    # shinyjs::inlineCSS(css),
-    
+
     # waiter
     waiter::use_waiter(),
     
@@ -43,10 +42,7 @@ model_ui <- function(id) {
                 ns("scale"), 
                 "Predictor transforming", 
                 choices = c("log", "logit", "normalize"), # variance-stabilizing transformations 
-                options = list(
-                  placeholder = 'Select to apply',
-                  onInitialize = I('function() { this.setValue(null); }')
-                )
+                options = default_message()
               ),
               shinyBS::bsTooltip(
                 id = ns("scale"), 
@@ -59,18 +55,14 @@ model_ui <- function(id) {
                 ns("dims"), 
                 "Dimension reduction", 
                 choices = c("PCA", "PLS"), 
-                options = list(
-                  placeholder = 'Select to apply',
-                  onInitialize = I('function() { this.setValue(null); }')
-                )
+                options = default_message()
               ),
               shinyBS::bsTooltip(
                 id = ns("dims"), 
                 title = "The many species found at each site require a reduction of dimensions.",
                 # placement = "right", 
                 options = list(container = "body")
-              ),
-              uiOutput(NS(id, "control"))
+              )
             ),
             footer = tagList(
               tags$br(), 
@@ -91,13 +83,11 @@ model_ui <- function(id) {
             id = ns("specs"),
             tabPanel(
               "engineering",
-              imageOutput(ns("eng"))
+              plotOutput(ns("eng"))
             ),
             tabPanel(
               "tuning",
-              #uiOutput(ns("part"))
-              tags$video(src = 'folds_regression__t_an_1.mkv', controls = "controls")
-              #imageOutput(ns("part"))
+              uiOutput(ns("part"))
             ),
             tabPanel(
               "validation",
@@ -106,26 +96,25 @@ model_ui <- function(id) {
             header = tagList(
               tags$br(),
               fluidRow(
-                column(4,
+                column(
+                  width = 4,
                   selectInput(
                     ns("parm"), 
                     "Parameter selection", 
                     choices = abbreviate_vars(parms)
                   )
                   ),
-                column(4,
+                column(
+                  width = 4,
                   selectInput(
                     ns("temp"), 
                     "Averaging period", 
                     choices = temp
                   )
                 ),
-                column(4,
-                  selectInput(
-                    ns("peek"), 
-                    "Taxa selection",
-                    choices = species_naming(pool)
-                  )
+                column(
+                  width = 4,
+                  uiOutput(NS(id, "control"))
                 )
               )
             ),
@@ -143,8 +132,8 @@ model_ui <- function(id) {
             id = ns("results"),
             header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
             tabPanelBody(
-              value = "help"#,
-              # plotOutput(ns("submetrics"))
+              value = "engineering",
+              plotOutput(ns("setup"))
             ),
             tabPanelBody(
               value = "tuning",
@@ -171,11 +160,20 @@ model_server <- function(id) {
 # misc elements
 #-------------------------------------------------------------------------------    
     
-    # `reactiveValues` to store image path
-    file <- reactiveValues(path = NULL)
+    # `reactiveValues` to store image path and dimensions
+    file <- reactiveValues(path = NULL, width = NULL, height  = NULL)
+    observe({  
+      # dynamic plot size
+      file$width <- session$clientData[[paste0("output_",id ,"-eng_width")]]
+      file$height <- session$clientData[[paste0("output_",id ,"-eng_height")]]
+      message(file$height)
+      message(file$width)
+    })
     
     # selected parameter
-    pm <- reactive({rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_"))})
+    pm <- reactive({
+      rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_"))
+      })
     
     # base map (for kriging interpolation)
     base <- reactive({
@@ -188,15 +186,54 @@ model_server <- function(id) {
         stars::st_downsample(n = 5)
     })
     
-    # enable disable tabs based on whether run model has been clicked
+    # enable disable tabs based on whether run model has been clicked or 
     # https://stackoverflow.com/questions/64324152/shiny-disable-tabpanel-using-shinyjs?noredirect=1&lq=1
     observe({
+      # results
       shinyjs::disable(selector = '.nav-tabs a[data-value="tuning"')
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
     })
+    
     observeEvent(input$run, {
+      # results
       shinyjs::enable(selector = '.nav-tabs a[data-value="tuning"')
       shinyjs::enable(selector = '.nav-tabs a[data-value="validation"')
+      # model setup
+      shinyjs::disable("scale")
+      shinyjs::disable("dims")
+      shinyjs::disable("model")
+    })
+    
+    observeEvent(input$reset, {
+      # results
+      shinyjs::disable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
+      # model setup
+      shinyjs::enable("scale")
+      shinyjs::enable("dims")
+      shinyjs::enable("model")
+      # back to start
+      updateTabsetPanel(session, "results", selected = "engineering")
+      updateTabsetPanel(session, "specs", selected = "engineering")
+    })
+    
+   
+    # reset model settings
+    observeEvent(input$reset, {
+      updateSelectizeInput(
+        session, 
+        "scale",
+        choices = c("log", "logit", "normalize"), 
+        options = default_message(),
+        selected = NULL 
+      )
+      updateSelectizeInput(
+        session, 
+        "dims", 
+        choices = c("PCA", "PLS"), 
+        options = default_message(),
+        selected = NULL 
+      )
     })
 
 #-------------------------------------------------------------------------------    
@@ -242,7 +279,7 @@ model_server <- function(id) {
       on.exit(waiter$hide())
       # tuning
       set.seed(2)
-      transferice_tuning_mem(splt(), wfl())
+      transferice_tuning(splt(), wfl())
     })
     
     # finalize model (with or without tuning)
@@ -256,118 +293,147 @@ model_server <- function(id) {
 
     # feature engineering and training
     observe({
-      # waiter
-      waiter <- waiter::Waiter$new()
-      waiter$show()
-      on.exit(waiter$hide())
+
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
-        dat <- splt() 
+        dat <- splt()
       } else if (input$specs == "tuning") {
+        # waiter
+        waiter <- waiter::Waiter$new()
+        waiter$show()
+        on.exit(waiter$hide())
         dat <- tun()
       } else if (input$specs == "validation") {
         dat <- final()
       }
+      # fitted data requires a species name variable selection
       # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  req(input$comp)
+      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+      
       # create plot or animation (save in `reactiveValues`)
       file$path <- ggpartial(
         obj = dat,
-        recipe = rcp(),
+        workflow = wfl(),
         pred = input$peek,
         tune = input$comp,
         out = !! pm(),
         type = if (isTruthy(input$toggle))  "spatial" else "regression",
         base_map = base(),
-        preprocessor = paste(input$scale, sep = "_")
+        height = file$height,
+        width = file$width
       )
     })
 
     # cross plots
-    output$eng <- renderImage(list(src = file$path), deleteFile = FALSE)
+    output$eng <- renderImage({
+      req(file$path)
+      list(
+        height = file$height, 
+        width = if (isTruthy(input$toggle)) file$width else file$height, 
+        src = file$path, 
+        contentType = 'image/png'
+      )
+    },
+    deleteFile = FALSE
+    )
     # CV animations
-    observe(message(glue::glue("{file.exists('folds_regression__t_an_1.mkv')}")))
-    #output$part <- renderImage(list(src = file$path), deleteFile = FALSE)
     output$part  <- renderUI({
-      tags$video(src = 'folds_regression__t_an_1.mkv', controls = "controls")
-      # tags$iframe(
-      #   width ="560",
-      #   height ="315",
-      #   seamless="seamless",
-      #   src = 'folds_regression__t_an_1.mkv',
-      #   frameborder = "0",
-      #   allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture",
-      #   allowfullscreen = NA
-      # )
+      req(file$path)
+      tags$video(
+        height = file$height, 
+        width = if (isTruthy(input$toggle)) file$width else file$height, 
+        type = "video/mkv", 
+        src = file$path, 
+        autoplay = TRUE,
+        loop = TRUE
+      )
     })
-    observe(message(glue::glue("{fs::path_file(file$path)}")))
     # final model image
-    output$final <- renderImage(list(src = file$path), deleteFile = FALSE)
+    output$final <- renderImage({
+      req(file$path)
+      list(
+        height = file$height, 
+        width = if (isTruthy(input$toggle)) file$width else file$height, 
+        src = file$path, 
+        contentType = 'image/png'
+      )
+    },
+    deleteFile = FALSE
+    )
     
-#-------------------------------------------------------------------------------    
-
-    # 
-    # # side panel (sub) model metrics
-    # output$results <- renderText({
-    #   if (input$specs == "tuning") {
-    #     "Optimize model"
-    #   } else if (input$specs == "validation") {
-    #     "Model performance"
-    #   }
-    # }) 
-    # 
-    # # show locations selection controls when data loaded
-    # observe({
-    #   updateTabsetPanel(session, "results", selected = input$specs)
-    # })
-    # 
-    # # collect sub-model metrics
-    # submet <- reactive({     
-    #   req(input$comp)
-    #   tune::collect_metrics(tun(), summarize = FALSE) |>
-    #     dplyr::mutate(
-    #       slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
-    #       ) |>
-    #     dplyr::filter(.data$.estimate < 100) # remove extreme outliers
-    #   }) 
-    # 
-    # # plot the ssubmodel metrics as a boxplot
-    # output$submetrics <- renderPlot({
-    #   req(input$comp)
-    #   ggplot2::ggplot(
-    #     submet(),
-    #     ggplot2::aes(
-    #       x = .data$num_comp,
-    #       y = .data$.estimate,
-    #       group = .data$num_comp,
-    #       fill = .data$slct
-    #     )
-    #   ) +
-    #   ggplot2::geom_boxplot(show.legend = FALSE) +
-    #   ggplot2::scale_x_discrete("components", labels = as.character(1:10), breaks = 1:10) +
-    #   ggplot2::labs(y = "RMSRE")
-    # },
-    # width = 250,
-    # height = 250
-    # ) 
-    # 
-    # # final model metric as table in sidepanel
-    # output$finmetrics <- renderUI({
-    #   # all collected metrics
-    #   mts <- tune::collect_metrics(final())
-    #   a <- print_metric(mts, "rsq")
-    #   b <- print_metric(mts, "rmse")
-    #   c <- print_metric(mts, "rmsre")
-    #   # print with mathjax
-    #   withMathJax(paste(a, b, c, sep = "\\"))
-    # }) 
-    # 
     # render controller based on tuning results
     output$control <- renderUI({
-      if (input$dims == "PCA") {
-        sliderInput(NS(id, "comp"), "Principal components", 1, 10, 1, ticks = FALSE)
+      if (!isTruthy(input$dims)) {
+        selectInput(
+          NS(id, "peek"), 
+          "Taxa selection",
+          choices =  species_naming(dinodat, parms = parms, "an")
+        )
+      } else if (input$dims == "PCA") {
+        sliderInput(NS(id, "comp"), "Principal components", 1, 9, 1, ticks = FALSE)
       }
     }) 
+#-------------------------------------------------------------------------------    
 
+    # side panel (sub) model metrics
+    output$results <- renderText({
+      if (input$specs == "engineering") {
+        "Model setup"
+      } else if (input$specs == "tuning") {
+        "Model optimization"
+      } else if (input$specs == "validation") {
+        "Model performance"
+      }
+    })
+
+    # show locations selection controls when data loaded
+    observe({
+      updateTabsetPanel(session, "results", selected = input$specs)
+    })
+
+    # collect sub-model metrics
+    submet <- reactive({
+      req(input$comp)
+      tune::collect_metrics(tun(), summarize = FALSE) |>
+        dplyr::mutate(
+          slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
+          ) |>
+        dplyr::filter(.data$.estimate < 100) # remove extreme outliers
+    })
+     
+    # plot the submodel metrics as a boxplot
+    output$submetrics <- renderPlot({
+      req(input$comp)
+      ggplot2::ggplot(
+        submet(),
+        ggplot2::aes(
+          x = .data$num_comp,
+          y = .data$.estimate,
+          group = .data$num_comp,
+          fill = .data$slct
+        )
+      ) +
+      ggplot2::geom_boxplot(show.legend = FALSE) +
+      ggplot2::scale_x_discrete(
+        "components", 
+        labels = as.character(1:10), 
+        breaks = 1:10
+      ) +
+      ggplot2::labs(y = "RMSRE")
+    },
+    width = 250,
+    height = 250
+    )
+     
+    # final model metric as table in sidepanel
+    output$finmetrics <- renderUI({
+      # all collected metrics
+      mts <- tune::collect_metrics(final())
+      a <- print_metric(mts, "rsq")
+      b <- print_metric(mts, "rmse")
+      c <- print_metric(mts, "rmsre")
+      # print with mathjax
+      withMathJax(paste(a, b, c, sep = "\\"))
+    })
   })
 }

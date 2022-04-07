@@ -28,20 +28,24 @@ ggpartial <- function(obj, ...) {
 #' @export
 ggpartial.mc_split <- function(
     obj, 
-    recipe, 
+    workflow, 
     pred = NULL, 
     tune = NULL, 
     out, 
     type = "regression",
-    base_map = NULL, 
-    preprocessor = NULL
+    base_map = NULL,
+    height = NULL,
+    width = NULL
   ) {
 
+  # extract recipe
+  recipe <- workflows::extract_preprocessor(workflow)
+  
   # predictor variable
   x <- pred_check(recipe, pred, tune)
   
   # outcome variable
-  y <- rlang::ensym(out) 
+  y <- rlang::ensym(out)
   
   # fallback for no supplied tune with a tuned recipe
   dls <- hardhat::extract_parameter_set_dials(recipe)
@@ -58,10 +62,13 @@ ggpartial.mc_split <- function(
     recipes::bake(new_data = NULL)
   
   # file name
-  nm <- paste("prep", type, preprocessor, rlang::as_name(y), rlang::as_name(x), 
-              sep = "_")
+  pred_nm <- sanitize_taxa(rlang::as_name(x))
+  recipe_specs <- sanitize_workflow(workflow, model = FALSE)
+  nm <- paste("prep", type, recipe_specs, rlang::as_name(y), pred_nm, 
+              sep = "_") 
+     
   ggpath <- try(
-    fs::path_package("transferice", "plots", nm, ext = "png"), 
+    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
     silent = TRUE
   )
   
@@ -73,8 +80,8 @@ ggpartial.mc_split <- function(
       gsub("_.*$", "", rlang::as_name(y))
     )
     
-    if (!isTruthy(pred) & !isTruthy(preprocessor)) {
-      x_lbl <- paste0(preprocessor, "(", as_name(x), ")")
+    if (!isTruthy(pred) & !isTruthy(recipe_specs)) {
+      x_lbl <- paste0("transform(", as_name(x), ")")
     } else {
       x_lbl <- as_name(x)
     }
@@ -121,9 +128,9 @@ ggpartial.mc_split <- function(
     ggplot2::ggsave(
       fs::path(nm, ext = "png"),
       plot = p, 
-      path = fs::path_package(package = "transferice", "plots"),
-      width = if (type == "regression") 400 else 600,
-      height = if (type == "regression") 400 else 300,
+      path = fs::path_package(package = "transferice", "www", "img"),
+      width = if (type == "regression") height else width,
+      height = if (type == "regression") height else height,
       dpi = 72,
       units = "px"
     )
@@ -131,27 +138,28 @@ ggpartial.mc_split <- function(
   } 
   # depending whether the figure is newly rendered this function executes 
   # fast or slow
-  fs::path_package("transferice", "plots", nm, ext = "png") 
+  fs::path_package("transferice", "www", "img", nm, ext = "png") 
 }
 #' @rdname ggpartial
 #' 
 #' @export
 ggpartial.tune_results <- function(
     obj, 
-    recipe = NULL,
+    workflow = NULL,
     pred = NULL, 
     tune = NULL, 
     out, 
     type = "regression", 
     base_map = NULL, 
     plot_type =  "dynamic", 
-    preprocessor = NULL,
-    mc_cores = 4,
-    renderer = "mkv"
+    mc_cores = 6,
+    renderer = "mkv",
+    height = NULL,
+    width = NULL
   ) {
   
   # memoised partials function
-  partials <- cv_model_extraction_mem(obj)
+  partials <- cv_model_extraction(obj, workflow)
   
   # predictor variable
   x <- pred_check(obj, pred, tune)
@@ -165,7 +173,7 @@ ggpartial.tune_results <- function(
                 "`type` = 'spatial'."), call. = FALSE)
   }
   
-  # check if tuned then subset num_comp
+  # check if tuned then subset num_comp (filter only what's needed)
   trytune <- try(dplyr::filter(partials, .data$num_comp == tune), silent = TRUE)
   if (!inherits(trytune, "try-error")) partials <- trytune
 
@@ -184,21 +192,23 @@ ggpartial.tune_results <- function(
   lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
   
   # name file 
-  nm <- paste("folds", type, preprocessor, rlang::as_name(y), rlang::as_name(x), 
-              sep = "_")
+  pred_nm <- sanitize_taxa(rlang::as_name(x))
+  workflow_specs <- sanitize_workflow(workflow)
+  nm <- paste("folds", type, workflow_specs, rlang::as_name(y), pred_nm, 
+              sep = "_") 
   
   # potential paths
   if (plot_type == "dynamic") {
     
     ggpath <- try(
-      fs::path_package("transferice", "www", nm, ext = renderer), 
+      fs::path_package("transferice", "www", "vid", nm, ext = renderer), 
       silent = TRUE
     )
     
   } else if (plot_type == "static") {
     
     ggpath <- try(
-      fs::path_package("transferice", "plots", nm, ext = "png"), 
+      fs::path_package("transferice", "www", "img", nm, ext = "png"), 
       silent = TRUE
     )
     
@@ -277,7 +287,8 @@ ggpartial.tune_results <- function(
       } else {
         stop("Unkown renderer.", call. = FALSE)
       }
-      
+        # parallel (relies on Bengston PR: https://github.com/thomasp85/gganimate/pull/403)
+        # future::plan("multicore", workers = 6L)
         # render
         p <- rlang::inject(
           gganimate::animate(
@@ -292,7 +303,9 @@ ggpartial.tune_results <- function(
           fs::path(nm, ext = renderer), 
           fps = 3,
           animation = p, 
-          path = fs::path_package(package = "transferice", "www")
+          path = fs::path_package(package = "transferice", "www", "vid"),
+          width = if (type == "regression") height else width,
+          height = if (type == "regression") height else height
         )
         
     } else if (plot_type == "static") {
@@ -312,10 +325,11 @@ ggpartial.tune_results <- function(
       ggplot2::ggsave(
         fs::path(nm, ext = "png"),
         plot = p, 
-        path = fs::path_package(package = "transferice", "plots"),
-        width = 20,
-        height = 20,
-        units = "cm"
+        path = fs::path_package(package = "transferice", "www", "img"),
+        width = if (type == "regression") height else width,
+        height = if (type == "regression") height else height,
+        dpi = 72,
+        units = "px"
       )
     
     } 
@@ -325,11 +339,11 @@ ggpartial.tune_results <- function(
   # fast or slow
   if (plot_type == "static") {
     
-    fs::path_package("transferice", "plots", nm, ext = "png") 
+    fs::path("img", nm, ext = "png") 
     
   } else if (plot_type == "dynamic") {
     
-    fs::path_package("transferice", "www", nm, ext = renderer)  
+    fs::path("vid", nm, ext = renderer)  
     
   }
 }
@@ -372,7 +386,7 @@ pred_check <- function(dat, pred, tune) {
         nrow()
       
       if (n_preds == n_comps) {
-        x <- NULL # nothing to return
+        x <- pred
       } else if (n_preds > n_comps) {
         x <- paste0(n_comps, "PCs") # return number of components tuning
       }

@@ -1,10 +1,34 @@
-cv_model_extraction <- function(tuned_cv) {
-  dplyr::select(tuned_cv, .data$splits, .data$id, .data$.extracts) |> 
-    tidyr::unnest(cols = c(.data$.extracts)) |>
-    dplyr::select(-.data$.config) |> 
-    dplyr::mutate(
+cv_model_extraction <- function(tuned_cv = NULL, wfl = NULL) {
+  
+  # name file
+  nm  <- sanitize_workflow(wfl)
+  
+  # dir for partials models
+  cache_part <- fs::path_package("transferice", "appdir", "cache", "model_extracts")
+  
+  cache_file <- try(
+    fs::path_package("transferice", "appdir", "cache", "model_extracts", nm, 
+                     ext = "rds"), 
+    silent = TRUE
+  )
+  
+  # if the cache does not exist then render from scratch
+  if (inherits(cache_file, "try-error")) {
+    
+    # extraction of partials model from CV sub-samples  
+    out <- dplyr::select(tuned_cv, .data$splits, .data$id, .data$.extracts) |> 
+      tidyr::unnest(cols = c(.data$.extracts)) |>
+      dplyr::select(-.data$.config) |> 
+      dplyr::mutate(
       .input = purrr::map(.data$.extracts, ~bind_partials(.x))
     )
+
+    # save
+    saveRDS(out, fs::path(cache_part, nm, ext = "rds"))
+  } 
+  # depending whether the data is  already generated this function executes 
+  # fast or slow
+  readRDS(fs::path(cache_part, nm, ext = "rds"))
 }
 
 calc_partials <- function(model, newdat, x, y) {
@@ -23,11 +47,3 @@ bind_partials <- function(fold) {
     fold$fit$model[,-1, drop = FALSE]
   )  
 }
-
-# memoise function
-cv_model_extraction_mem <- memoise::memoise(
-  cv_model_extraction, 
-  cache = cachem::cache_disk(
-    fs::path_package(package = "transferice", "appdir")
-  )
-)

@@ -48,34 +48,61 @@ transferice_tuning <- function(split, wfl) {
   # cross validation resampling
   dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10)
   
-  if(nrow(hardhat::extract_parameter_set_dials(wfl)) == 0) {
+  # name file
+  nm  <- sanitize_workflow(wfl)
+  
+  # dir for tuning and fitting
+  cache_dir <- fs::path_package("transferice", "appdir", "cache", "tuning")
+  # dir for partials models
+  cache_part <- fs::path_package("transferice", "appdir", "cache", "model_extracts")
+                   
+  cache_file <- try(
+    fs::path_package("transferice", "appdir", "cache", "tuning", nm, 
+                     ext = "rds"), 
+    silent = TRUE
+  )
+  
+  # if the cache does not exist then render from scratch
+  if (inherits(cache_file, "try-error")) {
+      
+    if(nrow(hardhat::extract_parameter_set_dials(wfl)) == 0) {
+      
+      out <- tune::fit_resamples(
+        wfl, 
+        resamples = dat_cv, 
+        metrics = yardstick::metric_set(transferice::rmsre), 
+        control = ctrl
+      )
+      
+    } else {
+  
+      # setting model tuning parameters
+      dls <- wfl %>%
+        dials::parameters() %>%
+        # set PCA steps to 9 components total
+        update(num_comp = dials::num_comp(c(1, 9))) 
+      
+      # tuning grid
+      tune_grid <- dials::grid_regular(dls, levels = 9)
+      # tuning
+      out <- tune::tune_grid(
+        wfl,
+        resamples = dat_cv,
+        grid = tune_grid,
+        metrics = yardstick::metric_set(transferice::rmsre), # custom metric
+        control = ctrl
+      )
+    }
     
-    tune::fit_resamples(
-      wfl, 
-      resamples = dat_cv, 
-      metrics = yardstick::metric_set(transferice::rmsre), 
-      control = ctrl
-    )
+    # save tuning or fitted data
+    saveRDS(out, fs::path(cache_dir, nm, ext = "rds"))
     
-  } else {
-
-    # setting model tuning parameters
-    dls <- wfl %>%
-      dials::parameters() %>%
-      # set PCA steps to 9 components total
-      update(num_comp = dials::num_comp(c(1, 9))) 
-    
-    # tuning grid
-    tune_grid <- dials::grid_regular(dls, levels = 9)
-    # tuning
-    tune::tune_grid(
-      wfl,
-      resamples = dat_cv,
-      grid = tune_grid,
-      metrics = yardstick::metric_set(transferice::rmsre), # custom metric
-      control = ctrl
-    )
-  }
+    # now also extract the partial models
+    saveRDS(cv_model_extraction(out, wfl), fs::path(cache_part, nm, ext = "rds"))
+  } 
+  # depending whether the data is  already generated this function executes 
+  # fast or slow
+  readRDS(fs::path(cache_dir, nm, ext = "rds"))
 }
 
 transferice_finalize <- function(split, wfl, dial = NULL) {
@@ -102,7 +129,7 @@ transferice_finalize <- function(split, wfl, dial = NULL) {
 # memoise function
 transferice_tuning_mem <- memoise::memoise(
   transferice_tuning, 
-  cache = cachem::cache_disk(fs::path_package(package = "transferice", "appdir"))
+  cache = cachem::cache_disk(fs::path_package(package = "transferice", "appdir", "cache", "tuning"))
   )
 
 # print model metric
@@ -142,3 +169,10 @@ step_log_center <- function(rcp) {
 
 # control resample of model fit
 ctrl <- tune::control_resamples(extract = function(x) tune::extract_fit_parsnip(x))
+
+default_message <- function() {
+  list(
+    placeholder = 'Select to apply',
+    onInitialize = I('function() { this.setValue(null); }')
+  )
+}

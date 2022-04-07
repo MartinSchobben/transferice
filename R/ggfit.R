@@ -3,13 +3,14 @@
 #' @export
 ggpartial.last_fit <- function(
     obj, 
-    recipe = NULL, 
+    workflow = NULL, 
     pred = NULL, 
     tune = NULL, 
     out, 
     type = "regression",
     base_map = NULL,
-    preprocessor = NULL
+    height = NULL,
+    width = NULL
     ) {
   
   # predictor variable
@@ -23,6 +24,7 @@ ggpartial.last_fit <- function(
 
   # parameter of interest
   pm <- as_name(y)
+  
   # all parameters
   pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
   
@@ -31,10 +33,12 @@ ggpartial.last_fit <- function(
   ttl_spat <- paste("Difference in prediction", x)
   
   # name
-  nm <- paste("final", type, preprocessor, pm, x, sep = "_")
+  workflow_specs <- sanitize_workflow(workflow)
+  nm <- paste("final", type, workflow_specs, pm, x, sep = "_") 
+  
   # potential path
   ggpath <- try(
-    fs::path_package("transferice", "plots", nm, ext = "png"), 
+    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
     silent = TRUE
   )
   
@@ -46,12 +50,15 @@ ggpartial.last_fit <- function(
     if (type == "spatial") {
       
       # original data
-      origin <- dplyr::transmute(obj, origin = purrr::map(splits, rsample::testing)) |> 
+      origin <- dplyr::transmute(
+        obj, 
+        origin = purrr::map(splits, rsample::testing)
+      ) |> 
         tidyr::unnest(cols = c(origin))
       # predictions
       output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
       # interpolate
-      z <- interpolate_model(origin, output, !!rlang::sym(pm), base_map)
+      z <- interpolate_model(origin, output, !! rlang::sym(pm), base_map)
       
       # difference on raster (predicted - truth)
       z <- z - base_map
@@ -60,7 +67,7 @@ ggpartial.last_fit <- function(
       # label
       lbl <- oceanexplorer::env_parm_labeller(as_name(y), prefix = "Delta")
       
-      # plot (suppres waqrning of replacing fill scale)
+      # plot 
       p <- oceanexplorer::plot_NOAA(z) +
         ggplot2::scale_fill_gradient2(lbl) +
         ggplot2::ggtitle(ttl_spat)
@@ -81,18 +88,17 @@ ggpartial.last_fit <- function(
           names_to = c(".value", "parameter"),
           names_pattern = paste0("(.*)_(._", averaging ,")")
         )
-      
-      # if (selected != "all")  {
-        # check if param exists
-        chk <- pm %in% unique(long_obj$parameter)
-        if (!chk) stop("Selected parameter does not exist in data.", call. = FALSE)
-        long_obj <- dplyr::filter(long_obj,  .data$parameter ==  pm)
-      # }
-    
+
+      # check if param exists
+      chk <- pm %in% unique(long_obj$parameter)
+      if (!chk) stop("Selected parameter does not exist in data.", 
+                     call. = FALSE)
+      long_obj <- dplyr::filter(long_obj,  .data$parameter ==  pm)
+   
       p <- ggplot2::ggplot(
         long_obj, 
         ggplot2::aes(x = .data$.truth, y = .data$.pred)
-        ) +  
+      ) +  
         ggplot2::geom_point() +  
         ggplot2::geom_abline(color = 'blue', linetype = 2) +
         ggplot2::labs(
@@ -113,9 +119,9 @@ ggpartial.last_fit <- function(
       ggplot2::ggsave(
         fs::path(nm, ext = "png"),
         plot = p, 
-        path = fs::path_package(package = "transferice", "plots"),
-        width = if (type == "regression") 400 else 600,
-        height = if (type == "regression") 400 else 300,
+        path = fs::path_package(package = "transferice", "www", "img"),
+        width = if (type == "regression") height else width,
+        height = if (type == "regression") height else height,
         dpi = 72,
         units = "px"
       )
@@ -124,5 +130,5 @@ ggpartial.last_fit <- function(
   
   # depending whether the figure is newly rendered this function executes 
   # fast or slow
-  fs::path_package("transferice", "plots", nm, ext = "png") 
+  fs::path_package("transferice", "www", "img", nm, ext = "png") 
 }

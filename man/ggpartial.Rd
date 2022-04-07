@@ -22,36 +22,55 @@ ggpartial(obj, ...)
 
 \method{ggpartial}{mc_split}(
   obj,
-  recipe,
+  workflow,
   pred = NULL,
   tune = NULL,
   out,
   type = "regression",
-  preprocessor = NULL
+  base_map = NULL
 )
 
 \method{ggpartial}{tune_results}(
   obj,
-  recipe = NULL,
+  workflow = NULL,
   pred = NULL,
   tune = NULL,
   out,
   type = "regression",
   base_map = NULL,
   plot_type = "dynamic",
-  preprocessor = NULL
+  workflow_specs = NULL,
+  mc_cores = 6,
+  renderer = "mkv"
 )
 }
 \arguments{
-\item{obj}{Rsample mc_split object or tune tune_results object}
+\item{obj}{Rsample mc_split object or tune tune_results object.}
 
-\item{x}{x variable}
+\item{recipe}{Recipe for feature engineering (recipe object).}
 
-\item{y}{y variable}
+\item{pred}{Predictor variable (character string).}
+
+\item{tune}{Tune variable (character or numeric string).}
+
+\item{out}{Outcome variable (character or symbol).}
+
+\item{type}{Plot output type. "Regression" for a simple scatter plot with a
+regression line. "Spatial" for a projection on a global map.}
+
+\item{preprocessor}{Character string detailing the engineering steps.}
 }
 \value{
-
+A \code{ggplot2:\link[ggplot2:ggplot()]{ggplot}} or pathway to a plot
+or animation.
 }
 \description{
-partial conditional regression for trained model on test data
+This function plots several aspect of the machine learning workflow.
+}
+\details{
+\itemize{
+\item Feature engineering for subsets of variables of the data.
+\item Partial conditional regression for trained models on the test data split.
+\item R squared plot for the final fit on all variables.
+}
 }

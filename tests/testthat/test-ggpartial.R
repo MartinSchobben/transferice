@@ -13,25 +13,6 @@ test_that("partial regressions can be plotted with tuning", {
   # recipe
   rcp <- transferice_recipe(dinodat, trans = "logit", dim_reduction = "PCA")
   
-  # inspect feature engineering
-  vdiffr::expect_doppelganger(
-    "feature engineering",
-    ggpartial(splt, rcp, tune = 1, out = t_an, preprocessor = "logit")
-  )
-  
-  # inspect feature engineering (on map)
-  vdiffr::expect_doppelganger(
-    "feature engineering",
-    ggpartial(splt, rcp, tune = 1, out = n_an, type = "spatial", 
-              base_map = base, preprocessor = "logit")
-  )
-  
-  # what happens if `pred` is supplied with a tuned recipe?
-  expect_error(
-    ggpartial(splt, rcp, pred = "33", out = t_an, preprocessor = "logit"),
-    "The model has been tuned and therefore `tune` needs to be supplied!"
-  )
-  
   # model
   mdl <- parsnip::linear_reg() |>
     parsnip::set_engine('lm') |>
@@ -41,25 +22,49 @@ test_that("partial regressions can be plotted with tuning", {
   wfl <- workflows::workflow() |>
     workflows::add_recipe(rcp) |>
     workflows::add_model(mdl)
-
+  
   # tuning
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
   
+  # inspect feature engineering
+  vdiffr::expect_doppelganger(
+    "feature engineering",
+    ggpartial(splt, wfl, tune = 1, out = t_an)
+  )
+  
+  # inspect feature engineering (on map)
+  vdiffr::expect_doppelganger(
+    "feature engineering",
+    ggpartial(splt, wfl, tune = 1, out = n_an, type = "spatial", base_map = base)
+  )
+  
+  # what happens if `pred` is supplied with a tuned recipe?
+  expect_error(
+    ggpartial(splt, wfl, pred = "33", out = t_an),
+    "The model has been tuned and therefore `tune` needs to be supplied!"
+  )
+  
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(tuned_cv, tune = 1, out = t_an, plot_type = "static")
+    ggpartial(tuned_cv, wfl, tune = 1, out = t_an, plot_type = "static")
   )
   
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(tuned_cv, tune = 1, out = n_an, type = "spatial", base_map = base, 
-              plot_type = "static")
+    ggpartial(tuned_cv, wfl, tune = 1, out = n_an, type = "spatial", 
+              base_map = base, plot_type = "static")
   )
 })
   
 test_that("partial regressions can be plotted without tuning", {
+  
+  # partial map projection
+  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
+    oceanexplorer::filter_NOAA(depth = 0) |> 
+    stars::st_warp(crs = 4326) |> 
+    stars::st_downsample(n = 5)
   
   set.seed(1)
   # resample
@@ -67,12 +72,6 @@ test_that("partial regressions can be plotted without tuning", {
   
   # recipe
   rcp <- transferice_recipe(dinodat, trans = "log")
-  
-  # inspect feature engineering
-  vdiffr::expect_doppelganger(
-    "feature engineering",
-     ggpartial(splt, rcp, pred = "44", out = t_an, preprocessor = "log")
-  )
   
   # model
   mdl <- parsnip::linear_reg() |>
@@ -87,29 +86,31 @@ test_that("partial regressions can be plotted without tuning", {
   # fitting
   set.seed(2)
   fitted_cv <- transferice_tuning(splt, wfl)
+  
+  
+  # inspect feature engineering
+  vdiffr::expect_doppelganger(
+    "feature engineering",
+    ggpartial(splt, wfl, pred = "Pentapharsodinium dalei", out = t_an)
+  )
 
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(fitted_cv, pred = "44", out = t_an, plot_type = "static", preprocessor = "log")
+    ggpartial(fitted_cv, wfl, pred = "Pentapharsodinium dalei", out = t_an, 
+              plot_type = "static")
   )
   
   # create error by supplying tune
   expect_error(
-    ggpartial(fitted_cv, tune = 1, pred = NULL, out = t_an, plot_type = "static", preprocessor = "log"),
+    ggpartial(fitted_cv, wfl, tune = 1, pred = NULL, out = t_an, plot_type = "static"),
     "The model has NOT been tuned and therefore `pred` needs to be supplied!"
   )
-  
-  # partial map projection
-  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
-    oceanexplorer::filter_NOAA(depth = 0) |> 
-    stars::st_warp(crs = 4326) |> 
-    stars::st_downsample(n = 5)
-  
+
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(fitted_cv, pred = "44", out = n_an, type = "spatial", base_map = base, 
-              plot_type = "static", preprocessor = "log")
+    ggpartial(fitted_cv, wfl, pred = "Pentapharsodinium dalei", out = n_an, 
+              type = "spatial", base_map = base, plot_type = "static")
   )
 })
 

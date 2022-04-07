@@ -21,21 +21,22 @@ test_that("final model output can be plotted with tuning", {
   final <- transferice_finalize(splt, wfl, 3)
   
   # r squared plot
-  ggpartial(final, tune = 1, out = t_an, preprocessor = "logit")
+  ggpartial(final, wfl, tune = 1, out = t_an)
   
   # map projection
-  base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
+  base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |>
     oceanexplorer::filter_NOAA(depth = 0) |>
     stars::st_warp(crs = 4326) |>
     stars::st_downsample(n = 5)
 
-  ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
+  
+  ggpartial(final, wfl, tune = 1, out = t_an, type = "spatial", base_map = base)
 })
 
 test_that("final model output can be plotted without tuning", {
   
-  set.seed(1)
   # resample
+  set.seed(1)
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # model
@@ -55,7 +56,7 @@ test_that("final model output can be plotted without tuning", {
   final <- transferice_finalize(splt, wfl)
   
   # r squared plot
-  ggpartial(final, pred = "1", out = t_an, preprocessor = "logit")
+  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", out = t_an)
   
   # map projection
   base <- oceanexplorer::get_NOAA("phosphate", 1, "annual") |>
@@ -63,7 +64,8 @@ test_that("final model output can be plotted without tuning", {
     stars::st_warp(crs = 4326) |>
     stars::st_downsample(n = 5)
   
-  ggfit(final, abbreviate_vars(parms), selected = "p", type = "spatial", base_map = base)
+  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", 
+            out = t_an, type = "spatial", base_map = base)
 })
 
 test_that("variable check with tuning", {
@@ -89,5 +91,4 @@ test_that("variable check with tuning", {
   final <- transferice_finalize(splt, wfl, 3)
   
   pred_check(final, NULL, 1)
-  
 })

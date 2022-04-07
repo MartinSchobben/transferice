@@ -29,6 +29,7 @@ Imports:
     shinyBS,
     shinyjs,
     shinyWidgets,
+    stringr,
     tibble (>= 3.1.6),
     tidyr (>= 1.2.0),
     transformr,

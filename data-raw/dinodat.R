@@ -4,7 +4,8 @@
 dbpath <- fs::path_package(package = "transferice", "extdata", 
                            "transferice.sqlite")
 con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
-dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con) 
+dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", 
+                             "neptune_taxonomy", con) 
 # environment
 locs <- DBI::dbGetQuery(
   con, 

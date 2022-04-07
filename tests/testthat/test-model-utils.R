@@ -9,7 +9,7 @@ test_that("transferice workflows and model tuning works", {
   rcp <- transferice_recipe(dinodat, trans = character(0), dim_reduction = character(0))
   rcp <- transferice_recipe(dinodat, trans = character(1), dim_reduction = character(1))
   rcp <- transferice_recipe(dinodat, trans = "logit")
-  rcp <- transferice_recipe(dinodat, trans = "normalize")
+  # rcp <- transferice_recipe(dinodat, trans = "normalize")
   
   # model
   mdl <- parsnip::linear_reg() |>

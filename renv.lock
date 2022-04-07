@@ -54,18 +54,18 @@
     },
     "MASS": {
       "Package": "MASS",
-      "Version": "7.3-56",
+      "Version": "7.3-55",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "af0e1955cb80bb36b7988cc657db261e",
+      "Hash": "c5232ffb549f6d7a04a152c34ca1353d",
       "Requirements": []
     },
     "Matrix": {
       "Package": "Matrix",
-      "Version": "1.4-1",
+      "Version": "1.4-0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "699c47c606293bdfbc9fd78a93c9c8fe",
+      "Hash": "130c0caba175739d98f2963c6a407cf6",
       "Requirements": [
         "lattice"
       ]
@@ -387,10 +387,10 @@
     },
     "fansi": {
       "Package": "fansi",
-      "Version": "1.0.2",
+      "Version": "1.0.3",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "f28149c2d7a1342a834b314e95e67260",
+      "Hash": "83a8afdbe71839506baa9f90eebad7ec",
       "Requirements": []
     },
     "farver": {
@@ -489,18 +489,14 @@
     },
     "gganimate": {
       "Package": "gganimate",
-      "Version": "1.0.7.9000",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteRepo": "gganimate",
-      "RemoteUsername": "thomasp85",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "989e0e65e74bbaf43457a253318f2a80ad855c74",
-      "Hash": "84a5a0224e1fc520ca855a35be9f3172",
+      "Version": "1.0.7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "729026083340f1076e622886c5b337b7",
       "Requirements": [
         "ggplot2",
         "glue",
+        "plyr",
         "progress",
         "rlang",
         "scales",
@@ -1279,10 +1275,10 @@
     },
     "sass": {
       "Package": "sass",
-      "Version": "0.4.0",
+      "Version": "0.4.1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "50cf822feb64bb3977bda0b7091be623",
+      "Hash": "f37c0028d720bab3c513fd65d28c7234",
       "Requirements": [
         "R6",
         "fs",
@@ -1373,6 +1369,18 @@
         "htmltools",
         "jsonlite",
         "sass",
+        "shiny"
+      ]
+    },
+    "shinyjs": {
+      "Package": "shinyjs",
+      "Version": "2.1.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "802e4786b353a4bb27116957558548d5",
+      "Requirements": [
+        "digest",
+        "jsonlite",
         "shiny"
       ]
     },
@@ -1581,10 +1589,11 @@
     "tune": {
       "Package": "tune",
       "Version": "0.1.6.9003",
-      "Source": "Repository",
-      "Repository": "CRAN",
+      "Source": "Local",
       "Remotes": "tidymodels/hardhat, tidymodels/parsnip, tidymodels/recipes,\n        tidymodels/workflows",
-      "Hash": "6c09ef751c20fff3c4e1c19b46bb02df",
+      "RemoteType": "local",
+      "RemoteUrl": "/home/nicola/Documents/work/code/tune",
+      "Hash": "bb969df5be26468136d4c17f93eb49e4",
       "Requirements": [
         "GPfit",
         "cli",
@@ -1676,6 +1685,18 @@
       "Repository": "CRAN",
       "Hash": "55e157e2aa88161bdb0754218470d204",
       "Requirements": []
+    },
+    "waiter": {
+      "Package": "waiter",
+      "Version": "0.2.5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "93e6b6c8ae3f81d4be77a0dc74e5cf5e",
+      "Requirements": [
+        "R6",
+        "htmltools",
+        "shiny"
+      ]
     },
     "waldo": {
       "Package": "waldo",

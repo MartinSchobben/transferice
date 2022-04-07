@@ -1,13 +1,5 @@
-# only once
-# fs::link_create(
-fs::dir_copy(
-  fs::path_package("transferice", "www"),
-  fs::path(fs::path_package("transferice", "appdir", "model-module")),
-  overwrite = TRUE
-  )
-
-
 ui <- fluidPage(
+ 
   theme = bslib::bs_theme(bootswatch = "spacelab"),
   withMathJax(),
   # section below allows in-line LaTeX via $ in mathjax.

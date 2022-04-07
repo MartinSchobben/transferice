@@ -18,3 +18,24 @@ test_that("rows add to 1", {
     )
   on.exit(DBI::dbDisconnect(con))
 })
+
+test_that("workflow with no steps can be sanitized", {
+  # resample
+  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  
+  # recipe
+  rcp <- transferice_recipe(dinodat)
+  
+  # model
+  mdl <- parsnip::linear_reg() |>
+    parsnip::set_engine('lm') |>
+    parsnip::set_mode('regression')
+  
+  # workflow
+  wfl <- workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
+    workflows::add_model(mdl)
+  
+  sanitize_workflow(wfl)
+  
+})
