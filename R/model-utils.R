@@ -45,6 +45,16 @@ transferice_recipe <- function(dat, trans = NULL, dim_reduction = NULL,
 
 transferice_tuning <- function(split, wfl) {
   
+  # path to package
+  pkg_path <- fs::path_package("transferice")
+  # if directories don't exist then create them
+  if (!fs::dir_exists(fs::path(pkg_path, "appdir", "cache", "tuning"))) {
+    fs::dir_create(pkg_path, "appdir", "cache", "tuning")
+  }
+  if (!fs::dir_exists(fs::path(pkg_path, "appdir", "cache", "model_extracts"))) {
+    fs::dir_create(pkg_path, "appdir", "cache", "model_extracts")
+  }
+  
   # cross validation resampling
   dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10)
   
@@ -126,11 +136,6 @@ transferice_finalize <- function(split, wfl, dial = NULL) {
   tune::last_fit(wfl, split = split, metrics = mts)
 }
 
-# memoise function
-transferice_tuning_mem <- memoise::memoise(
-  transferice_tuning, 
-  cache = cachem::cache_disk(fs::path_package(package = "transferice", "appdir", "cache", "tuning"))
-  )
 
 # print model metric
 print_metric <- function(dat, metric, sig = 1) {
@@ -176,3 +181,4 @@ default_message <- function() {
     onInitialize = I('function() { this.setValue(null); }')
   )
 }
+

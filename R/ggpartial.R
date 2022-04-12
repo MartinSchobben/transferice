@@ -21,6 +21,15 @@
 #' 
 #' @export
 ggpartial <- function(obj, ...) { 
+  # path to package
+  pkg_path <- fs::path_package("transferice")
+  # if directories don't exist then create them
+  if (!fs::dir_exists(fs::path(pkg_path, "www", "img"))) {
+    fs::dir_create(pkg_path, "www", "img")
+  }
+  if (!fs::dir_exists(fs::path(pkg_path, "www", "vid"))) {
+    fs::dir_create(pkg_path, "www", "vid")
+  }
   UseMethod("ggpartial")
 }
 #' @rdname ggpartial
@@ -34,6 +43,7 @@ ggpartial.mc_split <- function(
     out, 
     type = "regression",
     base_map = NULL,
+    return_type =  "plot", 
     height = NULL,
     width = NULL
   ) {
@@ -60,6 +70,8 @@ ggpartial.mc_split <- function(
   cast <- recipes::prep(recipe, training = rsample::training(obj)) |> 
     # apply to training data
     recipes::bake(new_data = NULL)
+  
+  if (return_type == "cast") return(cast)
   
   # file name
   pred_nm <- sanitize_taxa(rlang::as_name(x))
@@ -152,7 +164,7 @@ ggpartial.tune_results <- function(
     type = "regression", 
     base_map = NULL, 
     plot_type =  "dynamic", 
-    mc_cores = 6,
+    mc_cores = 4,
     renderer = "mkv",
     height = NULL,
     width = NULL

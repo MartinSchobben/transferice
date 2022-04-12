@@ -38,10 +38,11 @@ model_ui <- function(id) {
             tabPanel("bayesian"),
             header = tagList(
               tags$br(), 
+              # variance-stabilizing transformations 
               selectizeInput(
                 ns("scale"), 
                 "Predictor transforming", 
-                choices = c("log", "logit", "normalize"), # variance-stabilizing transformations 
+                choices = c("log", "logit", "normalize"), 
                 options = default_message()
               ),
               shinyBS::bsTooltip(
@@ -51,6 +52,7 @@ model_ui <- function(id) {
                 # placement = "right", 
                 # options = list(container = "body")
               ),
+              # dimension reduction 
               selectizeInput(
                 ns("dims"), 
                 "Dimension reduction", 
@@ -133,7 +135,7 @@ model_ui <- function(id) {
             header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
             tabPanelBody(
               value = "engineering",
-              plotOutput(ns("setup"))
+              uiOutput(ns("setup"))
             ),
             tabPanelBody(
               value = "tuning",
@@ -174,6 +176,11 @@ model_server <- function(id) {
     pm <- reactive({
       rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_"))
       })
+    
+    ## all parameters
+    pms <- reactive({
+      paste(parms, temp[temp == "an"], sep = "_")
+    })
     
     # base map (for kriging interpolation)
     base <- reactive({
@@ -393,23 +400,36 @@ model_server <- function(id) {
 
     # collect sub-model metrics
     submet <- reactive({
-      req(input$comp)
-      tune::collect_metrics(tun(), summarize = FALSE) |>
-        dplyr::mutate(
-          slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
-          ) |>
-        dplyr::filter(.data$.estimate < 100) # remove extreme outliers
+      # fitted data requires a species name variable selection
+      # tuned data requires a dimension variable selection
+      if (isTruthy(input$dims))  {
+        
+        req(input$comp) 
+    
+        tune::collect_metrics(tun(), summarize = FALSE) |>
+          dplyr::mutate(
+            var = .data$num_comp,
+            slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
+            ) |>
+          dplyr::filter(.data$.estimate < 100) # remove extreme outliers
+      } else {
+        
+        req(input$peek)
+        tune::collect_metrics(tun(), summarize = FALSE) |>
+          dplyr::mutate(var = 1, slct = 1) |> 
+          dplyr::filter(.data$.estimate < 100) # remove extreme outliers
+      }
     })
      
     # plot the submodel metrics as a boxplot
     output$submetrics <- renderPlot({
-      req(input$comp)
+
       ggplot2::ggplot(
         submet(),
         ggplot2::aes(
-          x = .data$num_comp,
+          x = .data$var,
           y = .data$.estimate,
-          group = .data$num_comp,
+          group = .data$var,
           fill = .data$slct
         )
       ) +
@@ -420,11 +440,26 @@ model_server <- function(id) {
         breaks = 1:10
       ) +
       ggplot2::labs(y = "RMSRE")
-    },
+    }
+    ,
     width = 250,
     height = 250
     )
-     
+
+    # final model metric as table in sidepanel
+    output$setup <- renderUI({
+      # fitted data requires a species name variable selection
+      # tuned data requires a dimension variable selection
+      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+      print_model(
+        obj = splt(),
+        workflow = wfl(),
+        pred = input$peek,
+        tune = input$comp,
+        out = !! pm()
+      )
+    })
+    
     # final model metric as table in sidepanel
     output$finmetrics <- renderUI({
       # all collected metrics
@@ -433,7 +468,7 @@ model_server <- function(id) {
       b <- print_metric(mts, "rmse")
       c <- print_metric(mts, "rmsre")
       # print with mathjax
-      withMathJax(paste(a, b, c, sep = "\\"))
+      withMathJax(HTML(paste(a, b, c, sep = "<br/><br/>")))
     })
   })
 }

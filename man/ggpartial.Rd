@@ -9,13 +9,14 @@
 \usage{
 \method{ggpartial}{last_fit}(
   obj,
-  recipe = NULL,
+  workflow = NULL,
   pred = NULL,
   tune = NULL,
   out,
   type = "regression",
   base_map = NULL,
-  preprocessor = NULL
+  height = NULL,
+  width = NULL
 )
 
 ggpartial(obj, ...)
@@ -27,7 +28,10 @@ ggpartial(obj, ...)
   tune = NULL,
   out,
   type = "regression",
-  base_map = NULL
+  base_map = NULL,
+  return_type = "plot",
+  height = NULL,
+  width = NULL
 )
 
 \method{ggpartial}{tune_results}(
@@ -39,15 +43,14 @@ ggpartial(obj, ...)
   type = "regression",
   base_map = NULL,
   plot_type = "dynamic",
-  workflow_specs = NULL,
-  mc_cores = 6,
-  renderer = "mkv"
+  mc_cores = 4,
+  renderer = "mkv",
+  height = NULL,
+  width = NULL
 )
 }
 \arguments{
 \item{obj}{Rsample mc_split object or tune tune_results object.}
-
-\item{recipe}{Recipe for feature engineering (recipe object).}
 
 \item{pred}{Predictor variable (character string).}
 
@@ -57,6 +60,8 @@ ggpartial(obj, ...)
 
 \item{type}{Plot output type. "Regression" for a simple scatter plot with a
 regression line. "Spatial" for a projection on a global map.}
+
+\item{recipe}{Recipe for feature engineering (recipe object).}
 
 \item{preprocessor}{Character string detailing the engineering steps.}
 }

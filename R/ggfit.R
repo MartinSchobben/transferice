@@ -29,8 +29,8 @@ ggpartial.last_fit <- function(
   pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
   
   # name file, plot title and potential path
-  ttl_reg <- paste('R-squared Plot', x)
-  ttl_spat <- paste("Difference in prediction", x)
+  ttl_reg <- paste('R-squared Plot')
+  ttl_spat <- paste("Difference in prediction")
   
   # name
   workflow_specs <- sanitize_workflow(workflow)

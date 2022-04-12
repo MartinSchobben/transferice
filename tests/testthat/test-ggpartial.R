@@ -87,7 +87,6 @@ test_that("partial regressions can be plotted without tuning", {
   set.seed(2)
   fitted_cv <- transferice_tuning(splt, wfl)
   
-  
   # inspect feature engineering
   vdiffr::expect_doppelganger(
     "feature engineering",
