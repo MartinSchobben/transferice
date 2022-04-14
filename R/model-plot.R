@@ -104,30 +104,37 @@ ggpartial.mc_split <- function(
       spat <- tibble::as_tibble(obj) |> 
         dplyr::select(.data$longitude, .data$latitude)
       cast <- dplyr::bind_cols(spat, cast) |> 
-        sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) 
+        sf::st_as_sf(coords = c("longitude", "latitude"), crs = sf::st_crs(base_map)) 
       
       # plot
       p <- oceanexplorer::plot_NOAA(
         base_map,
         rng = range(base_map[[1]], na.rm = TRUE)
-      ) +
+      ) + 
         ggplot2::geom_sf(
           data= cast,
           # discretise abundance data
           mapping = ggplot2::aes(
-            color = 
+            color =
               ggplot2::cut_interval(
-                .data[[!!x]], 
-                3, 
+                .data[[!!x]],
+                3,
                 labels = c("low", "mid", "high")
               )
             )
         ) +
         ggplot2::scale_color_manual(
-          as_name(x), 
-          values = c("white", "grey", "black")
-        )
-      
+          as_name(x),
+          values = c("#fff7bc", "#fec44f", "#d95f0e"),
+          guide = ggplot2::guide_legend(title.position = "top")
+        ) + 
+        ggplot2::coord_sf(
+          xlim = c(-180, 180),
+          ylim = c(-90, 90),
+          default_crs = sf::st_crs(base_map),
+          crs = sf::st_crs(base_map),
+          expand = FALSE
+      )
     } else if (type == "regression") {
     
       # plot
@@ -135,6 +142,9 @@ ggpartial.mc_split <- function(
         ggplot2::labs(title = 'Feature engineering', y = y_lbl, x = x_lbl)
     
     }
+    
+    # add theme
+    p <- p + transferice_theme() 
     
     # saving
     ggplot2::ggsave(
@@ -280,15 +290,11 @@ ggpartial.tune_results <- function(
         p <- p+ gganimate::transition_states(attributes) +
           ggplot2::labs(title = 'Predicted values ({closest_state})')
         
-        pms <- c(height = 300, width = 600) # dimensions of gif
-        
       } else  if (type == "regression") {
         
         p <- p + gganimate::transition_states(.data$id) + 
           ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
-        
-        pms <- c(height = 400, width = 400) # dimensions of gif
-        
+
       }
     
       # choose renderer 
@@ -299,17 +305,21 @@ ggpartial.tune_results <- function(
       } else {
         stop("Unkown renderer.", call. = FALSE)
       }
+      
+        # add theme
+        p <- p + transferice_theme() 
+      
         # parallel (relies on Bengston PR: https://github.com/thomasp85/gganimate/pull/403)
         # future::plan("multicore", workers = 6L)
         # render
-        p <- rlang::inject(
-          gganimate::animate(
-            p, 
-            renderer =  renderer_fn,
-            !!! pms
-          )
+        p <- gganimate::animate(
+          p,        
+          renderer =  renderer_fn,
+          width = if (type == "regression") height else width,
+          height = if (type == "regression") height else height
         )
-      
+        
+    
         # saving
         gganimate::anim_save(
           fs::path(nm, ext = renderer), 
@@ -332,6 +342,9 @@ ggpartial.tune_results <- function(
           ggplot2::labs(title = 'Partial regressions', y = lbl)
 
       }
+      
+      # add theme
+      p <- p + transferice_theme() 
     
       # saving
       ggplot2::ggsave(
@@ -359,7 +372,145 @@ ggpartial.tune_results <- function(
     
   }
 }
+#' @rdname ggpartial
+#' 
+#' @export
+ggpartial.last_fit <- function(
+    obj, 
+    workflow = NULL, 
+    pred = NULL, 
+    tune = NULL, 
+    out, 
+    type = "regression",
+    base_map = NULL,
+    height = NULL,
+    width = NULL
+) {
+  
+  # predictor variable
+  x <- pred_check(obj, pred, tune)
+  
+  # outcome variable
+  y <- rlang::ensym(out) 
+  
+  # extract averaging
+  averaging <- gsub("^(.)*_", "", as_name(y))
+  
+  # parameter of interest
+  pm <- as_name(y)
+  
+  # all parameters
+  pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
+  
+  # name file, plot title and potential path
+  ttl_reg <- paste('R-squared Plot')
+  ttl_spat <- paste("Difference in prediction")
+  
+  # name
+  workflow_specs <- sanitize_workflow(workflow)
+  nm <- paste("final", type, workflow_specs, pm, x, sep = "_") 
+  
+  # potential path
+  ggpath <- try(
+    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
+    silent = TRUE
+  )
+  
+  if (inherits(ggpath, "try-error")) {
+    
+    # extract predictions
+    preds <- tune::collect_predictions(obj)
+    
+    if (type == "spatial") {
+      
+      # original data
+      origin <- dplyr::transmute(
+        obj, 
+        origin = purrr::map(splits, rsample::testing)
+      ) |> 
+        tidyr::unnest(cols = c(origin))
+      # predictions
+      output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
+      # interpolate
+      z <- interpolate_model(origin, output, !! rlang::sym(pm), base_map)
+      
+      # difference on raster (predicted - truth)
+      z <- z - base_map
+      names(z) = pm # rename
+      
+      # label
+      lbl <- oceanexplorer::env_parm_labeller(as_name(y), prefix = "Delta")
+      
+      # plot 
+      p <- oceanexplorer::plot_NOAA(z) +
+        ggplot2::scale_fill_gradient2(lbl) +
+        ggplot2::ggtitle(ttl_spat)
+      
+    } else if (type == "regression") {
+      
+      # rename original true values
+      obj <- dplyr::rename_with(
+        preds, 
+        .cols = dplyr::any_of(pms), 
+        .fn = ~paste0(".truth_", .x)
+      )
+      
+      # pivot to long format
+      long_obj <-tidyr::pivot_longer(
+        obj,
+        cols = dplyr::ends_with(paste0("_", averaging)),
+        names_to = c(".value", "parameter"),
+        names_pattern = paste0("(.*)_(._", averaging ,")")
+      )
+      
+      # check if param exists
+      chk <- pm %in% unique(long_obj$parameter)
+      if (!chk) stop("Selected parameter does not exist in data.", 
+                     call. = FALSE)
+      long_obj <- dplyr::filter(long_obj,  .data$parameter == pm)
+      
+      p <- ggplot2::ggplot(
+        long_obj, 
+        ggplot2::aes(x = .data$.truth, y = .data$.pred)
+      ) +  
+        ggplot2::geom_point(alpha = 0.3) +  
+        ggplot2::geom_abline(color = 'blue', linetype = 2) +
+        ggplot2::labs(
+          title = ttl_reg,       
+          y = 'Predicted',        
+          x = 'Actual'
+        )
+      
+      # if (selected == "all") {
+      #   p <- p + ggplot2::facet_wrap(ggplot2::vars(parameter), scales = "free") 
+      # } else {
+      #   p <- p
+      # }
+    }
+    
+    # add theme
+    p <- p + transferice_theme() 
+    
+    # save plot
+    ggplot2::ggsave(
+      fs::path(nm, ext = "png"),
+      plot = p, 
+      path = fs::path_package(package = "transferice", "www", "img"),
+      width = if (type == "regression") height else width,
+      height = if (type == "regression") height else height,
+      dpi = 72,
+      units = "px"
+    )
+  }
+  
+  # depending whether the figure is newly rendered this function executes 
+  # fast or slow
+  fs::path_package("transferice", "www", "img", nm, ext = "png") 
+}
 
+#-------------------------------------------------------------------------------
+# helper functions
+#-------------------------------------------------------------------------------
 # predictor check
 # predictor variable (either for tuning or just inspection)
 pred_check <- function(dat, pred, tune) {

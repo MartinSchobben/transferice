@@ -19,7 +19,7 @@ print_model.mc_split <- function(
   
   
   # number of outcome
-  var_info <- workflows::extract_preprocessor(wfl)$var_info |> 
+  var_info <- workflows::extract_preprocessor(workflow)$var_info |> 
     dplyr::filter(.data$role == "outcome") 
   # number of outcome
   nout <- nrow(var_info)
@@ -50,4 +50,23 @@ print_model.mc_split <- function(
   # print with mathjax
   withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> ")))
 }
-
+#' @rdname print_model
+#' 
+#' @export
+print_model.last_fit  <- function(    
+    obj, 
+    workflow, 
+    pred = NULL,
+    tune = NULL,
+    out = NULL
+  ) {
+  
+  # all collected metrics
+  mts <- tune::collect_metrics(obj)
+  a <- print_metric(mts, "rsq")
+  b <- print_metric(mts, "rmse")
+  c <- print_metric(mts, "rmsre")
+  all <- paste(a, b, c, sep = "<br/><br/>")
+  # print with mathjax
+  withMathJax(HTML(paste0("<b>model fit metrics</b>: <br/> <br/>", all)))
+}

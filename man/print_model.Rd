@@ -7,7 +7,7 @@
 \usage{
 print_model(obj, ...)
 
-\method{print_model}{mc_split}(obj, workflow, pred, tune, out)
+\method{print_model}{mc_split}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 }
 \description{
 Model print

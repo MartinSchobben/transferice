@@ -25,9 +25,14 @@ model_ui <- function(id) {
         width = 3,
         wellPanel(
           tabsetPanel(
-            id = NS(id, "school"),
+            id = ns("school"),
             tabPanel(
               "frequentist",
+              actionLink(
+                ns("modelhelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
               selectInput(
                 NS(id, "model"), 
                 "Model type", 
@@ -37,42 +42,56 @@ model_ui <- function(id) {
             ),
             tabPanel("bayesian"),
             header = tagList(
-              tags$br(), 
-              # variance-stabilizing transformations 
+              tags$br(),
+              # variance-stabilizing transformations
+              actionLink(
+                ns("scalehelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
               selectizeInput(
                 ns("scale"), 
                 "Predictor transforming", 
                 choices = c("log", "logit", "normalize"), 
                 options = default_message()
               ),
-              shinyBS::bsTooltip(
-                id = ns("scale"), 
-                title = "Scaling makes comparisons between predictors more straightforward.",
-                trigger = "hover"
-                # placement = "right", 
-                # options = list(container = "body")
-              ),
               # dimension reduction 
+              actionLink(
+                ns("dimshelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
               selectizeInput(
                 ns("dims"), 
                 "Dimension reduction", 
                 choices = c("PCA", "PLS"), 
                 options = default_message()
               ),
-              shinyBS::bsTooltip(
-                id = ns("dims"), 
-                title = "The many species found at each site require a reduction of dimensions.",
-                # placement = "right", 
-                options = list(container = "body")
-              )
             ),
             footer = tagList(
               tags$br(), 
-              tags$br(),
               fluidRow(
-                column(6, actionButton(ns("reset"), "Reset model")),
-                column(6, actionButton(ns("run"), "Train model"))
-              )
+                column(
+                  width = 6,
+                  actionLink(
+                    ns("resethelper"), 
+                    "", 
+                    icon = icon('question-circle')
+                  ),
+                  actionButton(ns("reset"), "Reset model")
+                ),
+                column(
+                  width = 6, 
+                  actionLink(
+                    ns("trainhelper"), 
+                    "", 
+                    icon = icon('question-circle')
+                  ),
+                  actionButton(ns("run"), "Train model")
+                )
+              ),
+              tags$br(),
+              wellPanel(uiOutput(ns("helptext")))
             )
           )
         )
@@ -242,7 +261,42 @@ model_server <- function(id) {
         selected = NULL 
       )
     })
+#-------------------------------------------------------------------------------
+# Help text
+#-------------------------------------------------------------------------------
+    helper <- reactiveValues(scale = NULL, dims = NULL, model = NULL, reset = NULL, train = NULL)
+    # initiate tag upon clicking tab
+    observe({
+      helper$scale <- input$scalehelper
+      helper$dims <- input$dimshelper
+      helper$model <- input$modelhelper
+      helper$reset <- input$resethelper
+      helper$train <- input$trainhelper
+    })
+    
+    output$helptext <- renderUI({
 
+      if (input$school == "frequentist" & !any(lapply(helper, isTruthy))) {
+        helpText("Frequentist is the study of probability and draws conclusions based on samples. It forms the basis for hypothesis testing and confidence intervals.")
+      } else if (input$school == "bayesian"  & !any(lapply(helper, isTruthy))) {
+        helpText("Bayesian statistics is an opposing philosophical school. It's notion is that prior information can be used to update beliefs and results in conditional probability.")
+      } else if (isTruthy(helper$scale)) {
+        helpText("Transforming of predictor variables can help clarify relationships with the outcome. It also helps the data to conform to model specifications such as linearity, normality and equal variance.")
+      } else if (isTruthy(helper$dims)) {
+        helpText("The datasets consist of many species. Hence a reduction of dimension by principical component analysis prevents problems like multicollinearity, where many predictors are highly correlated.")
+      } else if (isTruthy(helper$model)) {
+        helpText("Two mechanims for finding a model solution are implemented. Traditional Ordinary Least Squares (OLS) regression and Generalised Least Squares (GLS) regression. The latter deals with the lack of independence between observations due to spatial proximity of sampling sites.")
+      } else if (isTruthy(helper$reset)) {
+        helpText("This resets all controls to the original values.")
+      } else if (isTruthy(helper$train)) {
+        helpText("The model is trained by 10-fold cross validation. This means that a subsample of the dataset is used to fit the model and a test set to validate the model fit. This gives an idea of how well the model will perform on unkown datasets to make predictions. it also provides the opportunity to tune unconstrained model parameters such as the principal components selected when performing dimension reduction before the model fit.")
+      }
+    }) 
+    
+    # reset tag upon clicking tabs
+    observeEvent(input$school, {
+      helper$scale <- helper$dims <- helper$model <- helper$reset <- helper$train <- NULL
+    })
 #-------------------------------------------------------------------------------    
 # modelling
 #------------------------------------------------------------------------------- 
@@ -306,9 +360,9 @@ model_server <- function(id) {
         dat <- splt()
       } else if (input$specs == "tuning") {
         # waiter
-        waiter <- waiter::Waiter$new()
-        waiter$show()
-        on.exit(waiter$hide())
+        # waiter <- waiter::Waiter$new()
+        # waiter$show()
+        # on.exit(waiter$hide())
         dat <- tun()
       } else if (input$specs == "validation") {
         dat <- final()
@@ -380,6 +434,9 @@ model_server <- function(id) {
         sliderInput(NS(id, "comp"), "Principal components", 1, 9, 1, ticks = FALSE)
       }
     }) 
+    
+#-------------------------------------------------------------------------------
+# side panel    
 #-------------------------------------------------------------------------------    
 
     # side panel (sub) model metrics
@@ -446,7 +503,7 @@ model_server <- function(id) {
     height = 250
     )
 
-    # final model metric as table in sidepanel
+    # model features as text in side panel
     output$setup <- renderUI({
       # fitted data requires a species name variable selection
       # tuned data requires a dimension variable selection
@@ -460,15 +517,7 @@ model_server <- function(id) {
       )
     })
     
-    # final model metric as table in sidepanel
-    output$finmetrics <- renderUI({
-      # all collected metrics
-      mts <- tune::collect_metrics(final())
-      a <- print_metric(mts, "rsq")
-      b <- print_metric(mts, "rmse")
-      c <- print_metric(mts, "rmsre")
-      # print with mathjax
-      withMathJax(HTML(paste(a, b, c, sep = "<br/><br/>")))
-    })
+    # final model metric as text in side panel
+    output$finmetrics <- renderUI({print_model(final())})
   })
 }

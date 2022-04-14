@@ -89,3 +89,34 @@ sanitize_workflow <- function(wfl, model = TRUE) {
     recipe_spec
   }
 }
+
+transferice_theme <- function(base = ggplot2::theme_classic(), ...) {
+  `%+replace%` <- ggplot2::`%+replace%`
+  base %+replace%
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(size = 15, face = "bold"),
+      axis.text =  ggplot2::element_text(size = 10),
+      axis.title =  ggplot2::element_text(size = 12),
+      legend.text =  ggplot2::element_text(size = 10),
+      legend.title =  ggplot2::element_text(size = 12),
+      strip.text =   ggplot2::element_text(size = 12),
+      legend.box = "horizontal",
+      legend.position = "top",
+      rect =  ggplot2::element_rect(
+        fill = "transparent",
+        color = "transparent"
+      ),
+      panel.background = ggplot2::element_rect(
+        fill = "transparent",
+        color = "transparent"
+      ),
+      plot.background = ggplot2::element_rect(
+        fill = "transparent",
+        color = "transparent"
+      ),
+      legend.background = ggplot2::element_rect(
+        fill = "transparent",
+        color = "transparent"
+      )
+    )
+}

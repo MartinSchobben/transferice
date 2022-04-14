@@ -27,6 +27,11 @@ test_that("partial regressions can be plotted with tuning", {
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
   
+  
+  # final fit
+  final <- transferice_finalize(splt, wfl, 3)
+  
+  
   # inspect feature engineering
   vdiffr::expect_doppelganger(
     "feature engineering",
@@ -56,6 +61,12 @@ test_that("partial regressions can be plotted with tuning", {
     ggpartial(tuned_cv, wfl, tune = 1, out = n_an, type = "spatial", 
               base_map = base, plot_type = "static")
   )
+  
+  # final fit
+  
+  ggpartial(final, wfl, tune = 1, out = t_an)
+  
+  ggpartial(final, wfl, tune = 1, out = n_an, type = "spatial", base_map = base)
 })
   
 test_that("partial regressions can be plotted without tuning", {
@@ -87,6 +98,10 @@ test_that("partial regressions can be plotted without tuning", {
   set.seed(2)
   fitted_cv <- transferice_tuning(splt, wfl)
   
+  # final fit
+  final <- transferice_finalize(splt, wfl)
+  
+  
   # inspect feature engineering
   vdiffr::expect_doppelganger(
     "feature engineering",
@@ -111,6 +126,12 @@ test_that("partial regressions can be plotted without tuning", {
     ggpartial(fitted_cv, wfl, pred = "Pentapharsodinium dalei", out = n_an, 
               type = "spatial", base_map = base, plot_type = "static")
   )
+  
+  # r squared plot
+  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", out = t_an)
+
+  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", 
+            out = t_an, type = "spatial", base_map = base)
 })
 
 test_that("predictor arguments are supplied (not tuned)", {
@@ -149,6 +170,11 @@ test_that("predictor arguments are supplied (not tuned)", {
   # fitting
   fitted_cv <- transferice_tuning(splt, wfl)
   
+  # final fit
+  final <- transferice_finalize(splt, wfl, 3)
+  
+  
+  
   expect_error(
     pred_check(fitted_cv, "1", NULL),
     rlang::sym("1")
@@ -158,6 +184,8 @@ test_that("predictor arguments are supplied (not tuned)", {
     pred_check(fitted_cv, NULL, 1),
     "The model has NOT been tuned and therefore `pred` needs to be supplied!"
   )
+  
+  pred_check(final, NULL, 1)
   
   
 })
