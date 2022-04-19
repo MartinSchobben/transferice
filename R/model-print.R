@@ -41,14 +41,126 @@ print_model.mc_split <- function(
   
   # operations
   ops <- gsub("_", " ", sanitize_workflow(workflow, model = F))
-  ops <- paste("<b>operations</b>: <br/> <br/> ", ops, collapse = "")
+  ops <- paste("<b>operations</b>: ", ops, collapse = "")
   
   # model component
-  mdl <-paste("<b>model</b>: <br/> <br/>  $Y = \\beta_{0} + \\beta_{1} X + \\epsilon$", 
+  mdl <-paste("<b>model</b>: $Y = \\beta_{0} + \\beta_{1} X + \\epsilon$", 
               sep = "<br/> <br/>")
   
   # print with mathjax
-  withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> ")))
+  tagList(
+    wellPanel(
+      withMathJax(
+      HTML(
+        paste0("This section deals with preparing the data before model ", 
+               "training. It mainly involves variance stabilization of ", 
+               "predictors and the reduction of dimensionality. All models ", 
+               "are based on a multivariate multiple linear regression, based ", 
+               "on a matrix of n-predictors ($X$) and a matrix of m-outcomes ", 
+               "($Y$). <br/><br/> <b>Click on the button 'Train model' to ",
+               "proceed</b>.")
+        )
+      )),
+    tags$br(),
+    withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> ")))
+  )
+}
+#' @rdname print_model
+#' 
+#' @export
+print_model.tune_results  <- function(    
+    obj, 
+    workflow, 
+    pred = NULL,
+    tune = NULL,
+    out = NULL,
+    height = NULL,
+    width = NULL
+ ) {
+ 
+  # predictor variable
+  x <- pred_check(obj, pred, tune)
+  
+  # fitted data requires a species name variable selection
+  if (isTruthy(tune))  {
+    
+    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
+      dplyr::mutate(
+        var = .data$num_comp,
+        slct = dplyr::if_else(.data$num_comp == tune, TRUE, FALSE)
+      ) 
+     
+  } else {
+  # tuned data requires a dimension variable selection   
+    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
+      dplyr::mutate(var = 1, slct = 1)  
+        
+  }
+  
+  obj <- dplyr::filter(obj, .data$.estimate < 100) # remove extreme outliers
+  
+  # name
+  y <- rlang::ensym(out) 
+  workflow_specs <- sanitize_workflow(workflow)
+  nm <- paste("folds", "boxplot", workflow_specs, as_name(y), x, sep = "_") 
+  
+  # potential path
+  ggpath <- try(
+    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
+    silent = TRUE
+  )
+  
+  if (inherits(ggpath, "try-error")) {
+  
+  # boxplot of model RMSE
+  p <- ggplot2::ggplot(
+    data = obj,
+    mapping = ggplot2::aes(
+      x = .data$var,
+      y = .data$.estimate,
+      group = .data$var,
+      fill = .data$slct
+    )
+  ) +
+    ggplot2::geom_boxplot(show.legend = FALSE) +
+    ggplot2::scale_x_discrete(
+      "components", 
+      labels = as.character(1:10), 
+      breaks = 1:10
+    ) +
+    ggplot2::labs(y = "RMSRE")
+  
+  # add theme
+  p <- p + transferice_theme() 
+  
+  # save plot
+  ggplot2::ggsave(
+    fs::path(nm, ext = "png"),
+    plot = p, 
+    path = fs::path_package(package = "transferice", "www", "img"),
+    width = width,
+    height = height,
+    dpi = 72,
+    units = "px"
+  )
+  
+  }
+  
+  # plot and print with mathjax
+  tagList(
+    wellPanel(
+      withMathJax(
+        HTML(
+          paste0("Training. <br/><br/> <b>Click on the button 'Reset model' to ",
+                 "select another model.</b>")
+        )
+      )),
+    tags$br(),  
+    tags$div(
+      tags$img(src = fs::path("img", nm, ext = "png")), 
+      style="text-align: center;"
+    )
+  )
 }
 #' @rdname print_model
 #' 

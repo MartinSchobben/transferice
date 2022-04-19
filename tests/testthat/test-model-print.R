@@ -17,6 +17,12 @@ test_that("multiplication works", {
     workflows::add_recipe(rcp) |>
     workflows::add_model(mdl)
   
+  # tuning
+  set.seed(2)
+  tuned_cv <- transferice_tuning(splt, wfl)
+  
+  
   print_model(splt, wfl, tune = 1, out = t_an)
 
+  print_model(tuned_cv, wfl, tune = 1, out = t_an)
 })

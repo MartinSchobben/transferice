@@ -403,8 +403,9 @@ ggpartial.last_fit <- function(
   pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
   
   # name file, plot title and potential path
-  ttl_reg <- paste('R-squared Plot')
-  ttl_spat <- paste("Difference in prediction")
+  parsed_pm <- parms[abbreviate_vars(parms) == gsub("_(.)*$", "", pm)]
+  ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
+  ttl_spat <- paste0("Difference in prediction")
   
   # name
   workflow_specs <- sanitize_workflow(workflow)
@@ -467,11 +468,11 @@ ggpartial.last_fit <- function(
       chk <- pm %in% unique(long_obj$parameter)
       if (!chk) stop("Selected parameter does not exist in data.", 
                      call. = FALSE)
-      long_obj <- dplyr::filter(long_obj,  .data$parameter == pm)
+      long_obj <- dplyr::filter(long_obj, .data$parameter == pm)
       
       p <- ggplot2::ggplot(
-        long_obj, 
-        ggplot2::aes(x = .data$.truth, y = .data$.pred)
+        data = long_obj, 
+        mapping = ggplot2::aes(x = .data$.truth, y = .data$.pred)
       ) +  
         ggplot2::geom_point(alpha = 0.3) +  
         ggplot2::geom_abline(color = 'blue', linetype = 2) +

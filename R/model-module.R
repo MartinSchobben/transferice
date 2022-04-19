@@ -104,15 +104,15 @@ model_ui <- function(id) {
             id = ns("specs"),
             tabPanel(
               "engineering",
-              plotOutput(ns("eng"))
+              div(plotOutput(ns("eng")), style="text-align: center;")
             ),
             tabPanel(
-              "tuning",
-              uiOutput(ns("part"))
+              "training",
+              div(uiOutput(ns("part")), style="text-align: center;")
             ),
             tabPanel(
               "validation",
-              imageOutput(ns("final"))
+              div(plotOutput(ns("final")), style="text-align: center;")
             ),
             header = tagList(
               tags$br(),
@@ -157,8 +157,8 @@ model_ui <- function(id) {
               uiOutput(ns("setup"))
             ),
             tabPanelBody(
-              value = "tuning",
-              plotOutput(ns("submetrics"))
+              value = "training",
+              uiOutput(ns("submetrics"))
             ),
             tabPanelBody(
               value = "validation",
@@ -187,8 +187,7 @@ model_server <- function(id) {
       # dynamic plot size
       file$width <- session$clientData[[paste0("output_",id ,"-eng_width")]]
       file$height <- session$clientData[[paste0("output_",id ,"-eng_height")]]
-      message(file$height)
-      message(file$width)
+
     })
     
     # selected parameter
@@ -216,13 +215,13 @@ model_server <- function(id) {
     # https://stackoverflow.com/questions/64324152/shiny-disable-tabpanel-using-shinyjs?noredirect=1&lq=1
     observe({
       # results
-      shinyjs::disable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::disable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
     })
     
     observeEvent(input$run, {
       # results
-      shinyjs::enable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::enable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::enable(selector = '.nav-tabs a[data-value="validation"')
       # model setup
       shinyjs::disable("scale")
@@ -232,7 +231,7 @@ model_server <- function(id) {
     
     observeEvent(input$reset, {
       # results
-      shinyjs::disable(selector = '.nav-tabs a[data-value="tuning"')
+      shinyjs::disable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
       # model setup
       shinyjs::enable("scale")
@@ -264,39 +263,81 @@ model_server <- function(id) {
 #-------------------------------------------------------------------------------
 # Help text
 #-------------------------------------------------------------------------------
-    helper <- reactiveValues(scale = NULL, dims = NULL, model = NULL, reset = NULL, train = NULL)
-    # initiate tag upon clicking tab
-    observe({
-      helper$scale <- input$scalehelper
-      helper$dims <- input$dimshelper
-      helper$model <- input$modelhelper
-      helper$reset <- input$resethelper
-      helper$train <- input$trainhelper
-    })
-    
-    output$helptext <- renderUI({
 
-      if (input$school == "frequentist" & !any(lapply(helper, isTruthy))) {
+    # sidebar helptext
+    output$helptext <- renderUI({
+      if (input$school == "frequentist") {
         helpText("Frequentist is the study of probability and draws conclusions based on samples. It forms the basis for hypothesis testing and confidence intervals.")
-      } else if (input$school == "bayesian"  & !any(lapply(helper, isTruthy))) {
+      } else if (input$school == "bayesian") {
         helpText("Bayesian statistics is an opposing philosophical school. It's notion is that prior information can be used to update beliefs and results in conditional probability.")
-      } else if (isTruthy(helper$scale)) {
-        helpText("Transforming of predictor variables can help clarify relationships with the outcome. It also helps the data to conform to model specifications such as linearity, normality and equal variance.")
-      } else if (isTruthy(helper$dims)) {
-        helpText("The datasets consist of many species. Hence a reduction of dimension by principical component analysis prevents problems like multicollinearity, where many predictors are highly correlated.")
-      } else if (isTruthy(helper$model)) {
-        helpText("Two mechanims for finding a model solution are implemented. Traditional Ordinary Least Squares (OLS) regression and Generalised Least Squares (GLS) regression. The latter deals with the lack of independence between observations due to spatial proximity of sampling sites.")
-      } else if (isTruthy(helper$reset)) {
-        helpText("This resets all controls to the original values.")
-      } else if (isTruthy(helper$train)) {
-        helpText("The model is trained by 10-fold cross validation. This means that a subsample of the dataset is used to fit the model and a test set to validate the model fit. This gives an idea of how well the model will perform on unkown datasets to make predictions. it also provides the opportunity to tune unconstrained model parameters such as the principal components selected when performing dimension reduction before the model fit.")
       }
+    })
+      
+
+    # help text modals
+    observeEvent(input$scalehelper, {
+      showModal(modalDialog(title = "Predictor transforming","Transforming of predictor variables can help clarify relationships with the outcome. It also helps the data to conform to model specifications such as linearity, normality and equal variance."))
+    }) 
+      
+    observeEvent(input$dimshelper, {
+      showModal(
+        modalDialog(
+          title = "Dimension reduction", 
+          paste0("The datasets consist of many species. Hence a reduction of ", 
+                 "dimension by principical component analysis prevents ", 
+                 "problems like multicollinearity, where many predictors are ", 
+                 "highly correlated.")
+          )
+        )
     }) 
     
-    # reset tag upon clicking tabs
-    observeEvent(input$school, {
-      helper$scale <- helper$dims <- helper$model <- helper$reset <- helper$train <- NULL
+    observeEvent(input$modelhelper, {
+      showModal(
+        modalDialog(
+          title = "Model type", 
+          paste0("Two mechanims for finding a model solution are implemented. ", 
+                  "Traditional Ordinary Least Squares (OLS) regression and ", 
+                 "Generalised Least Squares (GLS) regression. The latter deals", 
+                 "with the lack of independence between observations due to ",
+                 "spatial proximity of sampling sites.")
+        )
+      )
+    }) 
+    
+    observeEvent(input$resethelper, {
+      showModal(
+        modalDialog(
+          title = "Reset model", 
+          "This resets all controls to the original values."
+        )
+      )
     })
+    
+    observeEvent(input$trainhelper, {
+        showModal(
+          modalDialog(
+            title = "Train model", 
+            paste0("The model is trained by 10-fold cross validation. This ",
+                   "means that a subsample of the dataset is used to fit the ",
+                   "model and a test set to validate the model fit. This ", 
+                   "gives, an idea of how well the model will perform on ", 
+                   "unkown datasets to make accurate predictions. ",
+                   "It also provides the opportunity to tune unconstrained ",
+                   "model parameters such as the principal components ",
+                   "selected when performing dimension reduction before the ",
+                   "model fit."),
+            tags$br(),
+            tags$br(),
+            tags$div(
+              tags$img(src= 'img/helper_crossvalidation.png'), 
+              style="text-align: center;"
+            ),
+            size = "l"
+          )
+        )
+    }) 
+    
+
 #-------------------------------------------------------------------------------    
 # modelling
 #------------------------------------------------------------------------------- 
@@ -358,7 +399,7 @@ model_server <- function(id) {
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
         dat <- splt()
-      } else if (input$specs == "tuning") {
+      } else if (input$specs == "training") {
         # waiter
         # waiter <- waiter::Waiter$new()
         # waiter$show()
@@ -431,7 +472,13 @@ model_server <- function(id) {
           choices =  species_naming(dinodat, parms = parms, "an")
         )
       } else if (input$dims == "PCA") {
-        sliderInput(NS(id, "comp"), "Principal components", 1, 9, 1, ticks = FALSE)
+        sliderInput(
+          NS(id, "comp"), 
+          "Principal components", 1, 9, 1, 
+          ticks = FALSE
+        )
+      } else if (input$specs == "validation") {
+        NULL
       }
     }) 
     
@@ -443,7 +490,7 @@ model_server <- function(id) {
     output$results <- renderText({
       if (input$specs == "engineering") {
         "Model setup"
-      } else if (input$specs == "tuning") {
+      } else if (input$specs == "training") {
         "Model optimization"
       } else if (input$specs == "validation") {
         "Model performance"
@@ -454,54 +501,6 @@ model_server <- function(id) {
     observe({
       updateTabsetPanel(session, "results", selected = input$specs)
     })
-
-    # collect sub-model metrics
-    submet <- reactive({
-      # fitted data requires a species name variable selection
-      # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  {
-        
-        req(input$comp) 
-    
-        tune::collect_metrics(tun(), summarize = FALSE) |>
-          dplyr::mutate(
-            var = .data$num_comp,
-            slct = dplyr::if_else(.data$num_comp == input$comp, TRUE, FALSE)
-            ) |>
-          dplyr::filter(.data$.estimate < 100) # remove extreme outliers
-      } else {
-        
-        req(input$peek)
-        tune::collect_metrics(tun(), summarize = FALSE) |>
-          dplyr::mutate(var = 1, slct = 1) |> 
-          dplyr::filter(.data$.estimate < 100) # remove extreme outliers
-      }
-    })
-     
-    # plot the submodel metrics as a boxplot
-    output$submetrics <- renderPlot({
-
-      ggplot2::ggplot(
-        submet(),
-        ggplot2::aes(
-          x = .data$var,
-          y = .data$.estimate,
-          group = .data$var,
-          fill = .data$slct
-        )
-      ) +
-      ggplot2::geom_boxplot(show.legend = FALSE) +
-      ggplot2::scale_x_discrete(
-        "components", 
-        labels = as.character(1:10), 
-        breaks = 1:10
-      ) +
-      ggplot2::labs(y = "RMSRE")
-    }
-    ,
-    width = 250,
-    height = 250
-    )
 
     # model features as text in side panel
     output$setup <- renderUI({
@@ -514,6 +513,22 @@ model_server <- function(id) {
         pred = input$peek,
         tune = input$comp,
         out = !! pm()
+      )
+    })
+    
+    # plot the submodel metrics as a boxplot
+    output$submetrics <- renderUI({
+      # fitted data requires a species name variable selection
+      # tuned data requires a dimension variable selection
+      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+      print_model(
+        obj = tun(), 
+        workflow = wfl(), 
+        pred = input$peek, 
+        tune = input$comp, 
+        out = !!pm(),
+        width = 250,
+        height = 250
       )
     })
     

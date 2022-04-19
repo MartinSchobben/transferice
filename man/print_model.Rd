@@ -3,11 +3,17 @@
 \name{print_model}
 \alias{print_model}
 \alias{print_model.mc_split}
+\alias{print_model.tune_results}
+\alias{print_model.last_fit}
 \title{Model print}
 \usage{
 print_model(obj, ...)
 
 \method{print_model}{mc_split}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
+
+\method{print_model}{tune_results}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
+
+\method{print_model}{last_fit}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 }
 \description{
 Model print

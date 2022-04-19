@@ -173,8 +173,6 @@ test_that("predictor arguments are supplied (not tuned)", {
   # final fit
   final <- transferice_finalize(splt, wfl, 3)
   
-  
-  
   expect_error(
     pred_check(fitted_cv, "1", NULL),
     rlang::sym("1")

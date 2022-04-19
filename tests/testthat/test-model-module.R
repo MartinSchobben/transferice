@@ -1,3 +1,4 @@
+addResourcePath('img', system.file('www/img', package = 'transferice'))
 addResourcePath('vid', system.file('www/vid', package = 'transferice'))
 # shiny app
 runApp(fs::path_package("transferice", "appdir", "model-module"), 
