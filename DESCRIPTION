@@ -1,5 +1,5 @@
 Package: transferice
-Title: Reconstruct sea ice dynamics with dinocyst assemblages.
+Title: Reconstructing the Past with Fossil Assemblages.
 Version: 0.0.0.9000
 Authors@R: 
     person("Martin", "Schobben", , "schobbenmartin@gmail.com", role = c("aut", "cre"),
@@ -10,14 +10,14 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports: 
+    automap,
     av,
     dials (>= 0.1.0),
     dplyr (>= 1.0.8),
     gganimate,
     ggplot2 (>= 3.3.5),
     gstat (>= 2.0.8),
-    magick,
-    memoise (>= 2.0.1),
+    oceanexplorer (>= 0.0.0.9002),
     parsnip (>= 0.2.0.9000),
     pool (>= 0.1.6),
     purrr (>= 0.3.4),
@@ -33,7 +33,7 @@ Imports:
     tibble (>= 3.1.6),
     tidyr (>= 1.2.0),
     transformr,
-    tune,
+    tune (>= 0.1.6.9003),
     tweenr,
     waiter,
     yardstick (>= 0.0.9)
@@ -49,6 +49,8 @@ Config/testthat/edition: 3
 VignetteBuilder: knitr
 Depends: 
     R (>= 2.10)
-Remotes: UtrechtUniversity/oceanexplorer
 StagedInstall: no
 LazyData: true
+Remotes: 
+    UtrechtUniversity/oceanexplorer,
+    UtrechtUniversity/tune

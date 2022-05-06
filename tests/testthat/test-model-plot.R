@@ -27,10 +27,8 @@ test_that("partial regressions can be plotted with tuning", {
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
   
-  
   # final fit
   final <- transferice_finalize(splt, wfl, 3)
-  
   
   # inspect feature engineering
   vdiffr::expect_doppelganger(
@@ -63,10 +61,16 @@ test_that("partial regressions can be plotted with tuning", {
   )
   
   # final fit
+  vdiffr::expect_doppelganger(
+    "final fit regression",
+    ggpartial(final, wfl, tune = 1, out = t_an)
+  )
   
-  ggpartial(final, wfl, tune = 1, out = t_an)
-  
-  ggpartial(final, wfl, tune = 1, out = n_an, type = "spatial", base_map = base)
+  vdiffr::expect_doppelganger(
+    "final fit spatial",
+    ggpartial(final, wfl, tune = 1, out = n_an, type = "spatial", 
+              base_map = base)
+  )
 })
   
 test_that("partial regressions can be plotted without tuning", {
@@ -100,7 +104,6 @@ test_that("partial regressions can be plotted without tuning", {
   
   # final fit
   final <- transferice_finalize(splt, wfl)
-  
   
   # inspect feature engineering
   vdiffr::expect_doppelganger(

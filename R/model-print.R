@@ -151,8 +151,17 @@ print_model.tune_results  <- function(
     wellPanel(
       withMathJax(
         HTML(
-          paste0("Training. <br/><br/> <b>Click on the button 'Reset model' to ",
-                 "select another model.</b>")
+          paste0("Training of a model has two purposes. <br/><br/>", 
+                 "1) It measures the generalization capacity of the model.",
+                 "In the animation on the left we would ideally want to see ",
+                 "a minimal amount of wobbling in the regression line. <br/>",
+                 "2) It helps select the optimal number of dimensions after ",
+                 "dimension reduction by principal component analyses. <br/>",
+                 "<br/>A good model has a low Root Mean Square Relative ",
+                 "Error. <br/><br/>",  
+                 "$RMSRE = \\sqrt{\\frac{1}{N}\\sum{\\left( \\frac{\\hat{Y}}{Y} - 1\\right)^2}}$",  
+                 "<br/><br/> <b>Click the button 'Reset model' to select ", 
+                 "another model.</b>")
         )
       )),
     tags$br(),  

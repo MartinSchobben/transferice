@@ -126,15 +126,7 @@ model_ui <- function(id) {
                   )
                   ),
                 column(
-                  width = 4,
-                  selectInput(
-                    ns("temp"), 
-                    "Averaging period", 
-                    choices = temp
-                  )
-                ),
-                column(
-                  width = 4,
+                  width = 8,
                   uiOutput(NS(id, "control"))
                 )
               )
@@ -154,15 +146,15 @@ model_ui <- function(id) {
             header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
             tabPanelBody(
               value = "engineering",
-              uiOutput(ns("setup"))
+              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("setup")))
             ),
             tabPanelBody(
               value = "training",
-              uiOutput(ns("submetrics"))
+              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("submetrics")))
             ),
             tabPanelBody(
               value = "validation",
-              uiOutput(ns("finmetrics"))
+              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("finmetrics")))
             ),
             type = "hidden"
           )
@@ -267,16 +259,29 @@ model_server <- function(id) {
     # sidebar helptext
     output$helptext <- renderUI({
       if (input$school == "frequentist") {
-        helpText("Frequentist is the study of probability and draws conclusions based on samples. It forms the basis for hypothesis testing and confidence intervals.")
+        helpText(paste0("Frequentist is the study of probability and draws ", 
+                        "conclusions based on samples. It forms the basis for ", 
+                        "hypothesis testing and confidence intervals."))
       } else if (input$school == "bayesian") {
-        helpText("Bayesian statistics is an opposing philosophical school. It's notion is that prior information can be used to update beliefs and results in conditional probability.")
+        helpText(paste0("Bayesian statistics is an opposing philosophical ", 
+                        "school. It's notion is that prior information can be ", 
+                        "used to update beliefs and results in conditional ", 
+                        "probability."))
       }
     })
       
 
     # help text modals
     observeEvent(input$scalehelper, {
-      showModal(modalDialog(title = "Predictor transforming","Transforming of predictor variables can help clarify relationships with the outcome. It also helps the data to conform to model specifications such as linearity, normality and equal variance."))
+      showModal(
+        modalDialog(
+          title = "Predictor transforming",
+          paste0("Transforming of predictor variables can help clarify ", 
+                 "relationships with the outcome. It also helps the data to ", 
+                 "conform to model specifications such as linearity, ",
+                 "normality and equal variance.")
+        )
+      )
     }) 
       
     observeEvent(input$dimshelper, {

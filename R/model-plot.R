@@ -44,8 +44,8 @@ ggpartial.mc_split <- function(
     type = "regression",
     base_map = NULL,
     return_type =  "plot", 
-    height = NULL,
-    width = NULL
+    height = NA,
+    width = NA
   ) {
 
   # extract recipe
@@ -176,8 +176,8 @@ ggpartial.tune_results <- function(
     plot_type =  "dynamic", 
     mc_cores = 4,
     renderer = "mkv",
-    height = NULL,
-    width = NULL
+    height = NA,
+    width = NA
   ) {
   
   # memoised partials function
@@ -383,8 +383,8 @@ ggpartial.last_fit <- function(
     out, 
     type = "regression",
     base_map = NULL,
-    height = NULL,
-    width = NULL
+    height = NA,
+    width = NA
 ) {
   
   # predictor variable
@@ -488,7 +488,7 @@ ggpartial.last_fit <- function(
       #   p <- p
       # }
     }
-    
+  
     # add theme
     p <- p + transferice_theme() 
     
