@@ -17,7 +17,6 @@ print_model.mc_split <- function(
     out = NULL
   ) {
   
-  
   # number of outcome
   var_info <- workflows::extract_preprocessor(workflow)$var_info |> 
     dplyr::filter(.data$role == "outcome") 
@@ -49,20 +48,11 @@ print_model.mc_split <- function(
   
   # print with mathjax
   tagList(
-    wellPanel(
-      withMathJax(
-      HTML(
-        paste0("This section deals with preparing the data before model ", 
-               "training. It mainly involves variance stabilization of ", 
-               "predictors and the reduction of dimensionality. All models ", 
-               "are based on a multivariate multiple linear regression, based ", 
-               "on a matrix of n-predictors ($X$) and a matrix of m-outcomes ", 
-               "($Y$). <br/><br/> <b>Click on the button 'Train model' to ",
-               "proceed</b>.")
-        )
-      )),
     tags$br(),
-    withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> ")))
+    withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> "))),
+    tags$br(),
+    tags$br(),
+    HTML("<b>Click on the button 'Train model' to proceed</b>.")
   )
 }
 #' @rdname print_model
@@ -147,27 +137,23 @@ print_model.tune_results  <- function(
   }
   
   # plot and print with mathjax
-  tagList(
-    wellPanel(
-      withMathJax(
-        HTML(
-          paste0("Training of a model has two purposes. <br/><br/>", 
-                 "1) It measures the generalization capacity of the model.",
-                 "In the animation on the left we would ideally want to see ",
-                 "a minimal amount of wobbling in the regression line. <br/>",
-                 "2) It helps select the optimal number of dimensions after ",
-                 "dimension reduction by principal component analyses. <br/>",
-                 "<br/>A good model has a low Root Mean Square Relative ",
-                 "Error. <br/><br/>",  
-                 "$RMSRE = \\sqrt{\\frac{1}{N}\\sum{\\left( \\frac{\\hat{Y}}{Y} - 1\\right)^2}}$",  
-                 "<br/><br/> <b>Click the button 'Reset model' to select ", 
-                 "another model.</b>")
-        )
-      )),
-    tags$br(),  
+  tagList(    
+    tags$br(),
+    tags$br(), 
     tags$div(
       tags$img(src = fs::path("img", nm, ext = "png")), 
       style="text-align: center;"
+    ),
+    tags$br(),
+    tags$br(), 
+    withMathJax(
+      HTML(
+        paste0(
+          "$RMSRE = \\sqrt{\\frac{1}{N}\\sum{\\left( \\frac{\\hat{Y}}{Y} - 1\\right)^2}}$",  
+          "<br/><br/> <b>Click the button 'Reset model' to select ", 
+          "another model.</b>"
+        )
+      )
     )
   )
 }

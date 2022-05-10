@@ -146,15 +146,18 @@ model_ui <- function(id) {
             header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
             tabPanelBody(
               value = "engineering",
-              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("setup")))
+              shinyBS::bsCollapsePanel(title = h5("Explain more"), info_eng()),
+              uiOutput(ns("setup"))
             ),
             tabPanelBody(
               value = "training",
-              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("submetrics")))
+              shinyBS::bsCollapsePanel(title = h5("Explain more"), info_train()),
+              uiOutput(ns("submetrics"))
             ),
             tabPanelBody(
               value = "validation",
-              shinyBS::bsCollapsePanel(title = "Explain more", uiOutput(ns("finmetrics")))
+              shinyBS::bsCollapsePanel(title = h5("Explain more"), ""),
+              uiOutput(ns("finmetrics"))
             ),
             type = "hidden"
           )
@@ -334,8 +337,8 @@ model_server <- function(id) {
             tags$br(),
             tags$br(),
             tags$div(
-              tags$img(src= 'img/helper_crossvalidation.png'), 
-              style="text-align: center;"
+              tags$img(src = 'img/helper_crossvalidation.png'), 
+              style ="text-align: center;"
             ),
             size = "l"
           )
@@ -540,4 +543,38 @@ model_server <- function(id) {
     # final model metric as text in side panel
     output$finmetrics <- renderUI({print_model(final())})
   })
+}
+
+# detailed information for engineering section
+info_eng <- function(...) {
+  wellPanel(
+    withMathJax(
+      HTML(
+        paste0("This section deals with preparing the data before model ", 
+               "training. It mainly involves variance stabilization of ", 
+               "predictors and the reduction of dimensionality. All models ", 
+               "are based on a multivariate multiple linear regression, based ", 
+               "on a matrix of n-predictors ($X$) and a matrix of m-outcomes ", 
+               "($Y$).")
+      )
+    )
+  )
+}
+
+# detailed information for training section
+info_train <- function(...) {
+  wellPanel(
+    withMathJax(
+      HTML(
+        paste0("Training of a model has two purposes. <br/><br/>", 
+               "1) It measures the generalization capacity of the model.",
+               "In the animation on the left we would ideally want to see ",
+               "a minimal amount of wobbling in the regression line. <br/>",
+               "2) It helps select the optimal number of dimensions after ",
+               "dimension reduction by principal component analyses. <br/>",
+               "<br/>A good model has a low Root Mean Square Relative ",
+               "Error.")
+      )
+    )
+  )
 }
