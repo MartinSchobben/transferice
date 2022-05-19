@@ -20,34 +20,31 @@ library(transferice)
 
 # Data
 
-For a starters we use all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
+For a starters we use again all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
 
 ```{r data}
 str(dinodat[1:10,1:15])
+xc <- dinodat[1:30,1:15]
+xc <- pivot_longer(xc, paste0(abbreviate_vars(parms), "_an"), names_to = "parameter")
+xc <- rename_with(xc, ~gsub(" ", "_", .x))
 ```
 
 ```{r form}
 
-# parameter names
-pms <- paste0(transferice:::abbreviate_vars(parms), "_an", collapse = "+")
-# dinocysts ids
-rm <- c(paste0(transferice:::abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
-dns <- paste0(paste0("`", names(dinodat)[!names(dinodat) %in% rm], "`"), collapse = "+")
+
 
 ```
 
 
 
 ```{r lme}
-
-lme4::lmer(list(fml1, fml2), dinodat)
+fm <- as.formula("value ~ Pentapharsodinium_dalei")
+nlme::lme(fm, data = xc, random = ~ Pentapharsodinium_dalei|parameter)
 
 ```
 
 
 ```{r stan}
-fml1 <- as.formula(paste0("t_an", "~", "`Operculodinium centrocarpum `" , "+ (1 | hole_id)"))
-fml2 <- as.formula(paste0("p_an", "~", "`Operculodinium centrocarpum `" , "+ (1 | hole_id)"))
-rstanarm::stan_mvmer(list(fml1, fml2), dinodat)
+
 
 ```

@@ -12,7 +12,7 @@ formula_parser <- function(
   
   averaging <- paste0("_", averaging)
 
-  if (type ==  "ordinary") {
+  if (type ==  "tidymodels") {
     
     # parameter names
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = "+")
@@ -25,7 +25,7 @@ formula_parser <- function(
     # formula
     as.formula(paste0(pms, "~", dns))
     
-  } else if (type == "tidymodels") {
+  } else if (type == "base") {
     
     # parameter names
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = ",")
@@ -33,12 +33,18 @@ formula_parser <- function(
     # need to rewrite formula as parsnip does not accept multivariate model
     as.formula(paste0("cbind(", pms, ")~."))
     
-  }
+  } 
+  #else if (type == )
 }
 
-transferice_recipe <- function(dat, trans = NULL, dim_reduction = NULL, 
-                               tunable = TRUE, averaging = "an", 
-                               remove = c("sample_id", "longitude", "latitude", "hole_id")) {
+transferice_recipe <- function(
+    dat, 
+    trans = NULL, 
+    dim_reduction = NULL, 
+    tunable = TRUE, 
+    averaging = "an", 
+    remove = c("sample_id", "longitude", "latitude", "hole_id")
+  ) {
 
 
   # formula
