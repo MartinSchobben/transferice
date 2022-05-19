@@ -54,5 +54,5 @@ Depends:
 StagedInstall: no
 LazyData: true
 Remotes: 
-    UtrechtUniversity/oceanexplorer,
-    UtrechtUniversity/tune
+    UtrechtUniversity,
+    MartinSchobben
