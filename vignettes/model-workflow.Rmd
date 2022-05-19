@@ -18,29 +18,60 @@ knitr::opts_chunk$set(
 library(transferice)
 ```
 
-The model workflows follows the conventions and concepts as developed in the tidymodels metapackage.
+For predictive modelling it is necessary to obtain a model that can generalize patterns in the data. The fundamental process to achieve this is data splitting, By leaving out a portion of the data during model construction, this provides an empirical way to evaluate a model's performance outside the scope of the original data.
+
+To achieve this this package use the tidymodels metapackage, where seperate package deal with re-sampling, model fitting and evaluation.
 
 # Data
 
-For a starters we use all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
+To exemplify the package goal of constructing transfer function for paleo-environmental reconstructions, we use a dataset containing global dinocyst from the surface sediment layer. For this data we want to evaluate their predictive value for oceanographic parameters (e.g., temperature, salinity, and nutrient concentrations) at a 30 meter water depth - the approximate habitat of dinoflagellates (which produce the resting stage cysts: "dinocysts"). Besides the different species and environmental parameters contains the coordinates (longitude and latitude) and metadata of the location (hole_id and sample_id).
 
 ```{r data}
 str(dinodat[1:10,1:15])
 ```
 
+The basic model constitutes thus a multivariate multiple regression model of matrix with $n$ dinocyst species and $m$ sites ($X$) and a matrix of $n$ oceanographic parameters and again $m$ sites ($Y$).
+
+$$Y = \beta_0 + \beta_1X$$
+
+
 # Splitting data with re-sampling
 
-Guarding against model overfitting. 
+A model that generalize well for a dataset should guard against model overfitting. Model overfitting means that a model might be well-fitted to the original data, but not necessarily fits an unknown data for future predictions. Hence, we split the data into a training set for model constructions, and a testing set model to assess predicitive performance outside the bounds of the original data. This is done with *rsample* [@rsample], like so:
 
 ```{r splits}
 # install.packages("rsample")
 library(rsample)
-dinodat_split <- initial_split(dinodat, prop = 0.75) # how to stratify
-
+# splitting
+dinodat_split <- initial_split(dinodat, prop = 0.75) 
 # training
 dinodat_train <- training(dinodat_split)
 # testing
 dinodat_test <- testing(dinodat_split)
+```
+
+
+# Model construction with parsnip
+
+Due to standardaization interfaces with tidymodels *parsnip* the search of suitable transfer functuinsis simplified. The method to solve the linear regression as specified above can be easily altered from ordinary elast square regression to one of a regularized form, such as a Bayesian approach with *rstanarm*. 
+
+```{r label, options}
+# install.packages("parsnip")
+library(parsnip)
+
+# set type of model (linear regression)
+lm_model <- linear_reg() |> 
+  # set the engine (ordinary least squares with base lm)
+  set_engine('lm') |> 
+  # usage of the model for regression
+  set_mode('regression')
+
+# set type of model (linear regression)
+stan_model <- linear_reg() |> 
+  # set the engine (bayesian with rstanarm)
+  set_engine('stan_glmer') |> 
+  # usage of the model for regression
+  set_mode('regression')
 ```
 
 # Feature engineering with recipes
@@ -48,12 +79,10 @@ dinodat_test <- testing(dinodat_split)
 ```{r recipe}
 # install.packages("recipes")
 library(recipes)
-# parameter names
-pms <- paste0(transferice:::abbreviate_vars(parms), "_an", collapse = "+")
-# dinocysts ids
-rm <- c(paste0(transferice:::abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
-dns <- paste0(paste0("`", names(dinodat)[!names(dinodat) %in% rm], "`"), collapse = "+")
-fml <- as.formula(paste0(pms, "~", dns))
+
+# parse formula
+fml <- formula_parser(dinodat, parms)
+
 # formula for recipes
 dinodat_recipe <- recipe(fml, data = dinodat) |> 
   # make dino count log odds
@@ -79,44 +108,42 @@ dinodat_test_prep <- prep(dinodat_recipe, training = dinodat_train) |>
   bake(new_data = dinodat_test)
 ```
 
-
-# Model construction with parsnip
-
-```{r label, options}
-# install.packages("parsnip")
-library(parsnip)
-lm_model <- linear_reg() %>%  
-  set_engine('lm') %>%  
-  set_mode('regression')
-```
-
-
 # Fit model and test
 
 ```{r fit}
-# need to rewerite formula as parsnip does not accept mutlivar
-sl_parms <- dinodat_test_prep |> 
-  select(-contains("PC")) |>  
-  names() 
-sl_parms <- paste0(transferice:::abbreviate_vars(sl_parms), "_an")
-pms2 <- paste0(sl_parms, collapse = ",")
-fml2 <- as.formula(paste0("cbind(", pms2, ")~."))
-#fit
+# need to rewrite formula as parsnip does not accept multivariate model
+fml2 <- formula_parser(dinodat, parms, type = "tidymodels")
+fml2 <- as.formula("t_an + p_an + n_an + i_an + o_an + s_an + I_an ~.")
+
+# fit (OLS)
 lm_fit <- lm_model %>%   
+  fit(fml2,  data = dinodat_train_prep)
+# fit (stan)
+stan_fit <- stan_model |>    
   fit(fml2,  data = dinodat_train_prep)
 ```
 
 
 ```{r predict}
-dinodat_predict <- predict(lm_fit, new_data = dinodat_test_prep)
+dinodat_predict_lm <- predict(lm_fit, new_data = dinodat_test_prep)
 
 # bind test
-dinodat_test_prep <- rename_with(
+dinodat_test_prep_lm <- rename_with(
   dinodat_test_prep, 
-  .cols = any_of(sl_parms), 
+  .cols = ends_with("_an"), 
   .fn = ~paste0(".truth_", .x)
 )
-outcome <- bind_cols(dinodat_test_prep, dinodat_predict)
+outcome_lm <- bind_cols(dinodat_test_prep_lm, dinodat_predict_lm)
+
+dinodat_predict_stan <- predict(stan_fit, new_data = dinodat_test_prep)
+
+# bind test
+dinodat_test_prep_stan <- rename_with(
+  dinodat_test_prep, 
+   .cols = ends_with("_an"), 
+  .fn = ~paste0(".truth_", .x)
+)
+outcome_stan <- bind_cols(dinodat_test_prep_stan, dinodat_predict_stan)
 ```
 
 # Evaluate model with yardstick
@@ -129,7 +156,7 @@ rmsre(
   outcome, 
   truth =  rlang::inject(c(!!! rlang::syms(paste0(".truth_", sl_parms)))), 
   estimate = rlang::inject(c(!!! rlang::syms(paste0(".pred_", sl_parms))))
-  )
+)
 ```
 
 visualize fit

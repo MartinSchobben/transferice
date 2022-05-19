@@ -19,10 +19,10 @@
     },
     "DT": {
       "Package": "DT",
-      "Version": "0.22",
+      "Version": "0.23",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "fc53164de9ee32692eef6fdd14115381",
+      "Hash": "d8f1498dc47763ce4647c8d03214d30b",
       "Requirements": [
         "crosstalk",
         "htmltools",
@@ -133,6 +133,21 @@
       "Repository": "CRAN",
       "Hash": "4f57884290cc75ab22f4af9e9d4ca862",
       "Requirements": []
+    },
+    "automap": {
+      "Package": "automap",
+      "Version": "1.0-16",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "67424a39af147cd059123a8a4eeee7ba",
+      "Requirements": [
+        "ggplot2",
+        "gstat",
+        "lattice",
+        "maptools",
+        "reshape",
+        "sp"
+      ]
     },
     "av": {
       "Package": "av",
@@ -431,6 +446,14 @@
         "iterators"
       ]
     },
+    "foreign": {
+      "Package": "foreign",
+      "Version": "0.8-82",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "32b25c97ce306a760c4d9f787991b5d9",
+      "Requirements": []
+    },
     "fs": {
       "Package": "fs",
       "Version": "1.5.2",
@@ -524,10 +547,10 @@
     },
     "globals": {
       "Package": "globals",
-      "Version": "0.14.0",
+      "Version": "0.15.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "eca8023ed5ca6372479ebb9b3207f5ae",
+      "Hash": "ace993e2dad5e64ed46391302b79e94f",
       "Requirements": [
         "codetools"
       ]
@@ -846,6 +869,18 @@
       "Hash": "b3d98a967ec17c80f795719529812fa0",
       "Requirements": []
     },
+    "maptools": {
+      "Package": "maptools",
+      "Version": "1.1-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "e60a1728ad29c48a3491777e0c55a07d",
+      "Requirements": [
+        "foreign",
+        "lattice",
+        "sp"
+      ]
+    },
     "mgcv": {
       "Package": "mgcv",
       "Version": "1.8-40",
@@ -931,8 +966,8 @@
       "Version": "0.0.0.9002",
       "Source": "Local",
       "RemoteType": "local",
-      "RemoteUrl": "/home/amandus/Documents/work/code/oceanexplorer",
-      "Hash": "ad39949ffa7377099482b0488d5d7872",
+      "RemoteUrl": "/home/nicola/Documents/work/code/oceanexplorer",
+      "Hash": "437c56e56ac96fa72f2a585fcc102e24",
       "Requirements": [
         "DT",
         "bslib",
@@ -956,17 +991,6 @@
         "waiter"
       ]
     },
-    "pROC": {
-      "Package": "pROC",
-      "Version": "1.18.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "417fd0d40479932c19faf2747817c473",
-      "Requirements": [
-        "Rcpp",
-        "plyr"
-      ]
-    },
     "parallelly": {
       "Package": "parallelly",
       "Version": "1.31.1",
@@ -977,15 +1001,16 @@
     },
     "parsnip": {
       "Package": "parsnip",
-      "Version": "0.2.1.9002",
+      "Version": "0.2.1.9001",
       "Source": "GitHub",
+      "Remotes": "tidymodels/hardhat",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "parsnip",
       "RemoteUsername": "tidymodels",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "083fd9a6ccf7d1bca80297875d1ca894a0c2b11c",
-      "Hash": "76a02120190e21a85faefb63edafdbf2",
+      "RemoteRef": "feature/case-weights",
+      "RemoteSha": "284252bacbf00a325d657c29f16704745d08e8d5",
+      "Hash": "c8b7fa54aec89e78f5ce51e406118360",
       "Requirements": [
         "cli",
         "dplyr",
@@ -1183,15 +1208,10 @@
     },
     "recipes": {
       "Package": "recipes",
-      "Version": "0.2.0.9000",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteRepo": "recipes",
-      "RemoteUsername": "tidymodels",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "e51482dfa2287d6631bb785263b2852fd7c5d27e",
-      "Hash": "cae5f7ffd8a44ba8921e03bf8c23df97",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "2a0f64b148f3064f980404287b511f98",
       "Requirements": [
         "Matrix",
         "dplyr",
@@ -1231,6 +1251,16 @@
       "Repository": "CRAN",
       "Hash": "206c4ef8b7ad6fb1060d69aa7b9dfe69",
       "Requirements": []
+    },
+    "reshape": {
+      "Package": "reshape",
+      "Version": "0.8.9",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "603d56041d7d4fa3ceb1864b3f6ee6b1",
+      "Requirements": [
+        "plyr"
+      ]
     },
     "rlang": {
       "Package": "rlang",
@@ -1419,14 +1449,15 @@
     },
     "shinyWidgets": {
       "Package": "shinyWidgets",
-      "Version": "0.6.4",
+      "Version": "0.7.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "02fba70d7c5c1ab0754d9c0108c029eb",
+      "Hash": "4c00b64347509091f39c01c52f8d9e4c",
       "Requirements": [
         "bslib",
         "htmltools",
         "jsonlite",
+        "rlang",
         "sass",
         "shiny"
       ]
@@ -1652,12 +1683,12 @@
     },
     "tune": {
       "Package": "tune",
-      "Version": "0.1.6.9003",
+      "Version": "0.2.0.9001",
       "Source": "Local",
-      "Remotes": "tidymodels/hardhat, tidymodels/parsnip, tidymodels/recipes,\n        tidymodels/workflows",
+      "Remotes": "tidymodels/parsnip@feature/case-weights, tidymodels/workflows,\n        tidymodels/hardhat, tidymodels/yardstick",
       "RemoteType": "local",
-      "RemoteUrl": "/home/amandus/Documents/work/code/tune",
-      "Hash": "1ab58f9419bbdab19ad0855bcf172b81",
+      "RemoteUrl": "/home/nicola/Documents/work/code/tune",
+      "Hash": "55f5f16126c9448d77a2ef521e735226",
       "Requirements": [
         "GPfit",
         "cli",
@@ -1676,6 +1707,7 @@
         "rsample",
         "tibble",
         "tidyr",
+        "tidyselect",
         "vctrs",
         "withr",
         "workflows",
@@ -1811,10 +1843,10 @@
     },
     "xfun": {
       "Package": "xfun",
-      "Version": "0.30",
+      "Version": "0.31",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "e83f48136b041845e50a6658feffb197",
+      "Hash": "a318c6f752b8dcfe9fb74d897418ab2b",
       "Requirements": []
     },
     "xml2": {
@@ -1853,14 +1885,20 @@
     },
     "yardstick": {
       "Package": "yardstick",
-      "Version": "0.0.9",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "fd1588dbcbb85aacd0d9b9009351c79d",
+      "Version": "0.0.9.9000",
+      "Source": "GitHub",
+      "Remotes": "tidymodels/hardhat",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "yardstick",
+      "RemoteUsername": "tidymodels",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "e56b69fc52365c1146bc741923e8d9bdacd642db",
+      "Hash": "3bd10da3d6c2cf8b981ff4ead19a04e4",
       "Requirements": [
         "dplyr",
         "generics",
-        "pROC",
+        "hardhat",
         "rlang",
         "tidyselect",
         "vctrs"

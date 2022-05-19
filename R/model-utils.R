@@ -1,21 +1,48 @@
-transferice_recipe <- function(dat, trans = NULL, dim_reduction = NULL, 
-                               tunable = TRUE) {
-
-  # parameter names
-  pms <- paste0(abbreviate_vars(parms), "_an", collapse = "+")
+# dat = dataset
+# parms = oceanographic parameters
+# averaging = averaging period
+# remove = variables not used in regression
+formula_parser <- function(
+    dat, 
+    parms, 
+    averaging = "an",
+    remove = c("sample_id", "longitude", "latitude", "hole_id"),
+    type = "ordinary"
+  ) {
   
-  # taxa names
-  rm <- c(
-    paste0(abbreviate_vars(parms), "_an"), 
-    "hole_id", 
-    "sample_id", 
-    "longitude",
-    "latitude"
-  )
-  tns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), collapse = "+")
- 
+  averaging <- paste0("_", averaging)
+
+  if (type ==  "ordinary") {
+    
+    # parameter names
+    pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = "+")
+    
+    # taxa names
+    rm <- c(paste0(transferice:::abbreviate_vars(parms), averaging), remove)
+    dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), 
+                  collapse = "+")
+    
+    # formula
+    as.formula(paste0(pms, "~", dns))
+    
+  } else if (type == "tidymodels") {
+    
+    # parameter names
+    pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = ",")
+
+    # need to rewrite formula as parsnip does not accept multivariate model
+    as.formula(paste0("cbind(", pms, ")~."))
+    
+  }
+}
+
+transferice_recipe <- function(dat, trans = NULL, dim_reduction = NULL, 
+                               tunable = TRUE, averaging = "an", 
+                               remove = c("sample_id", "longitude", "latitude", "hole_id")) {
+
+
   # formula
-  fml <- as.formula(paste0(pms, "~", tns))
+  fml <- formula_parser(dat, parms, averaging, remove)
   # recipe
   rcp <- recipes::recipe(fml, data = dat)
   
