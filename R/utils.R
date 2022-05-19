@@ -1,54 +1,76 @@
 # some dinocyst count datasets have absolute counts, so it is converted to
 # relative proportions for each sample
-calc_taxon_prop <- function(count, meta, taxon, con) {
+calc_taxon_prop <- function(count, meta, con) {
   # obtain counts and make wide format
   DBI::dbGetQuery(
     con ,
     paste0(
       "SELECT 
         c.sample_id, 
+        c.taxon_id,
+        hole_id,
         taxon_abundance / SUM(taxon_abundance) 
-          OVER (PARTITION BY c.sample_id) AS taxon_prop, 
-            c.taxon_id,
-            hole_id,
-            genus ||  
-              COALESCE(' ' || species, '') || 
-                COALESCE(' ' || subspecies, '')  AS name
-                  FROM ", count, " AS c
-                    LEFT JOIN ", meta, " AS s ON c.sample_id = s.sample_id
-                      LEFT JOIN ", taxon, " AS t 
-                        ON c.taxon_id = t.taxon_id"
-    )
-  ) |> 
-    # drop taxon id
-    dplyr::select(- .data$taxon_id) |> 
-    tidyr::pivot_wider(
-      names_from = name, 
-      values_from = taxon_prop, 
-      values_fill = numeric(1)
-    )
+          OVER (PARTITION BY c.sample_id) AS taxon_prop 
+            FROM ", count, " AS c
+              LEFT JOIN ", meta, " AS s ON c.sample_id = s.sample_id")
+    ) |>
+  tidyr::pivot_wider(
+    names_from = taxon_id,
+    values_from = taxon_prop,
+    values_fill = numeric(1)
+  )
   
 }
 
 # species names for selection
-species_naming <- function(dat, parms, averaging) {
+# dat: dataset
+# name: species name
+# con: database connection
+# taxon: name of datatable
+species_naming <- function(
+    con,
+    parms,
+    dat = NULL,
+    taxa_name = NULL, 
+    taxon = "neptune_taxonomy",
+    averaging = "an", 
+    remove = c("hole_id", "longitude", "latitude", "sample_id")
+) {
   
-  pms <- paste(abbreviate_vars(parms), averaging, sep = "_")
-  names(dat)[!names(dat) %in% c(pms, "hole_id", "longitude", "latitude","sample_id")]
+  # get taxon list
+  nms <- DBI::dbGetQuery(
+    con ,
+    paste0("SELECT taxon_id, genus ||  
+              COALESCE(' ' || species, '') || 
+              COALESCE(' ' || subspecies, '')  AS name
+                FROM ", taxon)
+  ) 
     
- # species_tb <- DBI::dbReadTable(dat, "neptune_taxonomy") |> 
- #   dplyr::mutate(
- #     dplyr::across(
- #       tidyselect::vars_select_helpers$where(is.character),  
- #        ~tidyr::replace_na(.x, "")
- #      )
- #    )
- # 
- #  setNames(
- #    species_tb$taxon_id, 
- #    nm = paste(species_tb$genus, species_tb$species, species_tb$subspecies)
- #  )
+  # named vector
+  nms <- setNames(
+    nms$taxon_id,
+    nm = nms$name
+  )
+  
+  # provide names if data is supplied
+  if (!is.null(dat)) {
+    pms <- paste(abbreviate_vars(parms), averaging, sep = "_")
+    ids <- names(dat)[!names(dat) %in% c(pms, remove)]
+    nms[nms %in% ids]
+    # provide id if name is supplied
+  } else if (!is.null(taxa_name)) {
+    nms[names(nms) %in% taxa_name]
+  }
 }
+
+# parameters
+abbreviate_vars <- function(x, type = "parms") {
+  x <- abbreviate(x, 1, strict = TRUE)
+  x[names(x) == "density"] <- "I" # density is different
+  x[names(x) == "silicate"] <- "i" # salinity is different
+  x
+}
+
 
 #' Title
 #'

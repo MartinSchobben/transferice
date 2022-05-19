@@ -104,15 +104,15 @@ model_ui <- function(id) {
             id = ns("specs"),
             tabPanel(
               "engineering",
-              div(plotOutput(ns("eng")), style="text-align: center;")
+              div(plotOutput(ns("eng")), style = "text-align: center;")
             ),
             tabPanel(
               "training",
-              div(uiOutput(ns("part")), style="text-align: center;")
+              div(uiOutput(ns("part")), style = "text-align: center;")
             ),
             tabPanel(
               "validation",
-              div(plotOutput(ns("final")), style="text-align: center;")
+              div(plotOutput(ns("final")), style = "text-align: center;")
             ),
             header = tagList(
               tags$br(),
@@ -477,7 +477,7 @@ model_server <- function(id) {
         selectInput(
           NS(id, "peek"), 
           "Taxa selection",
-          choices =  species_naming(dinodat, parms = parms, "an")
+          choices =  species_naming(pool, parms, dat = dat())
         )
       } else if (input$dims == "PCA") {
         sliderInput(

@@ -29,9 +29,10 @@ taxon_plot <- function(taxon, var, id, cutoff = 30) {
     )
   ) +
     ggplot2::geom_bar(stat = "identity") +
-    ggplot2::labs(y = "odds", x = glue::glue("{id}")) +
-    ggplot2::scale_y_continuous(expand = c(0.1, 0)) +
-    ggplot2::scale_x_discrete(name = "", breaks = NULL)
+    ggplot2::labs(y = "odds") +
+    ggplot2::scale_y_continuous(expand = c(0, 0)) +
+    ggplot2::scale_x_discrete(name = "", breaks = NULL) + 
+    transferice_theme() 
 }
 
 

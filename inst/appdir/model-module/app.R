@@ -1,3 +1,6 @@
+# get db
+pool <- get_pool() 
+
 ui <- fluidPage(
  
   theme = bslib::bs_theme(bootswatch = "spacelab"),
