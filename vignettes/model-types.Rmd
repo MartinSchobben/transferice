@@ -1,0 +1,53 @@
+---
+title: "model-types"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{model-types}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(transferice)
+```
+
+# Data
+
+For a starters we use all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
+
+```{r data}
+str(dinodat[1:10,1:15])
+```
+
+```{r form}
+
+# parameter names
+pms <- paste0(transferice:::abbreviate_vars(parms), "_an", collapse = "+")
+# dinocysts ids
+rm <- c(paste0(transferice:::abbreviate_vars(parms), "_an"), "hole_id", "sample_id", "longitude", "latitude")
+dns <- paste0(paste0("`", names(dinodat)[!names(dinodat) %in% rm], "`"), collapse = "+")
+
+```
+
+
+
+```{r lme}
+
+lme4::lmer(list(fml1, fml2), dinodat)
+
+```
+
+
+```{r stan}
+fml1 <- as.formula(paste0("t_an", "~", "`Operculodinium centrocarpum `" , "+ (1 | hole_id)"))
+fml2 <- as.formula(paste0("p_an", "~", "`Operculodinium centrocarpum `" , "+ (1 | hole_id)"))
+rstanarm::stan_mvmer(list(fml1, fml2), dinodat)
+
+```

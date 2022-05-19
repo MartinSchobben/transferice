@@ -274,6 +274,8 @@ ggpartial.tune_results <- function(
   
       # plot
       p <- ggbase(comb, x, y, id = TRUE)  + 
+        
+        ## !!!!! consider using abline and only extract coefficients
         ggplot2::geom_line(
           mapping = ggplot2::aes(
             y = .data[[!!rlang::sym(paste0(".pred_",  rlang::as_name(y)))]]

@@ -17,6 +17,8 @@ Imports:
     gganimate,
     ggplot2 (>= 3.3.5),
     gstat (>= 2.0.8),
+    lme4,
+    multilevelmod,
     oceanexplorer (>= 0.0.0.9002),
     parsnip (>= 0.2.0.9000),
     pool (>= 0.1.6),
