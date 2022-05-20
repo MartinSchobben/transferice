@@ -169,7 +169,7 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id) {
+model_server <- function(id, data_id = "dinocyst_an_original") { # data id is based on query use R6 in future
   moduleServer(id, function(input, output, session) {
     
 #-------------------------------------------------------------------------------
@@ -353,7 +353,8 @@ model_server <- function(id) {
     dat <- reactive({
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
-      dinodat
+      nm <- file_namer("rds", "raw", data_id, "count", "prop")
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds"))
     })
     
     # re-sample
@@ -387,9 +388,15 @@ model_server <- function(id) {
       waiter <- waiter::Waiter$new()
       waiter$show()
       on.exit(waiter$hide())
+      
+      # name for caching
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      nm <- file_namer("rds", "train", data_id, "prop", wfl_nm)
+      
       # tuning
       set.seed(2)
-      transferice_tuning(splt(), wfl())
+      transferice_tuning(splt(), wfl()) |> 
+        app_caching("rds", nm) # caching
     })
     
     # finalize model (with or without tuning)
@@ -477,7 +484,7 @@ model_server <- function(id) {
         selectInput(
           NS(id, "peek"), 
           "Taxa selection",
-          choices =  species_naming(pool, parms, dat = dat())
+          choices =  species_naming(pool) 
         )
       } else if (input$dims == "PCA") {
         sliderInput(

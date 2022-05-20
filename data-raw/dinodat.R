@@ -48,6 +48,9 @@ reduce_sf <- function(parms) {
 environ_dat <- dplyr::bind_cols(locs, reduce_sf(ls_parms)) |> 
   dplyr::select(-c(.data$site))
 
+# save data
+usethis::use_data(environ_dat , overwrite = TRUE)
+
 # ------------------------------------------------------------------------------
 # dinocysts
 # ------------------------------------------------------------------------------

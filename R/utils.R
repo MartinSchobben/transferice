@@ -29,8 +29,7 @@ calc_taxon_prop <- function(count, meta, con) {
 # taxon: name of datatable
 species_naming <- function(
     con,
-    parms,
-    dat = NULL,
+    ids = NULL,
     taxa_name = NULL, 
     taxon = "neptune_taxonomy",
     averaging = "an", 
@@ -48,19 +47,20 @@ species_naming <- function(
     
   # named vector
   nms <- setNames(
+    # ids
     nms$taxon_id,
-    nm = nms$name
+    # sanitize names
+    nm = vapply(nms$name, sanitize_taxa, character(1))
   )
-  
+
   # provide names if data is supplied
-  if (!is.null(dat)) {
-    pms <- paste(abbreviate_vars(parms), averaging, sep = "_")
-    ids <- names(dat)[!names(dat) %in% c(pms, remove)]
-    nms[nms %in% ids]
-    # provide id if name is supplied
-  } else if (!is.null(taxa_name)) {
-    nms[names(nms) %in% taxa_name]
-  }
+  if (!is.null(ids))  return(nms[nms %in% ids]) 
+    
+  # provide id if name is supplied
+  if (!is.null(taxa_name)) return(nms[names(nms) %in% taxa_name]) 
+  
+  nms
+  
 }
 
 # parameters
@@ -86,7 +86,7 @@ get_pool <- function() {
 
 # sanitize taxa names for file names
 sanitize_taxa <- function(nm) {
-  stringr::str_trim(nm) |>  stringr::str_replace("[[:blank:]]", "_")
+  stringr::str_trim(nm) #|>  stringr::str_replace("[[:blank:]]", "_")
 }
 
 # sanitize workflow

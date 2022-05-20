@@ -17,8 +17,9 @@ explo_ui <- function(id) {
         width = 3,
         wellPanel(        
           h3("Site selection"),
-          selectInput(NS(id, "area"), "Region", choices = geo),
-          selectInput(NS(id, "temp"), "Averaging", choices = temp[1])
+          selectInput(NS(id, "area"), "Region", choices = area),
+          selectInput(NS(id, "temp"), "Averaging", choices = temp),
+          selectInput(NS(id, "group"), "Taxa", choices = "dinocyst")
         )
       ),
       
@@ -76,6 +77,7 @@ explo_ui <- function(id) {
 explo_server <- function(id) {
 
   moduleServer(id, function(input, output, session) {
+  
 
     # area defined extent of latitude
     limit <- reactive({
@@ -101,7 +103,7 @@ explo_server <- function(id) {
       oceanexplorer::get_NOAA(
         parms[abbreviate_vars(parms) == input$parm], 
         1, 
-        "annual"
+        names(temp)[temp == input$temp]
       ) 
     })
     
@@ -118,8 +120,7 @@ explo_server <- function(id) {
         depth = 30,
         points = pts, 
         epsg = input$area
-      ) + 
-        transferice_theme() 
+      ) 
     })
   
     # get environmental variable from sample location
@@ -134,28 +135,50 @@ explo_server <- function(id) {
 
     # proportional taxon data
     taxon_prop <- reactive({
+      # calculate proportions of taxa dataset (and turn to wide format)
       taxon_prop <- calc_taxon_prop(
         "neptune_sample_taxa", 
         "neptune_sample", 
         pool
-        )
+      )
       # filter to available stations (linked to region selection)
       dplyr::filter(taxon_prop, .data$hole_id %in% locs()$hole_id)
     })
 
+    # combine taxon and environmental data, and export
+    observe({
+      
+      # unique id for dataset
+      id <- paste(
+        input$group, 
+        names(temp)[temp == input$temp], 
+        names(area)[area == input$area], 
+        sep = "_"
+      )
+      
+      # file name for caching
+      nm <- file_namer("rds", "raw", id, "count", "prop")
+      
+      # combine
+      out <- dplyr::bind_cols(
+        extract_NOAA(crds, names(temp)[temp == input$temp]), 
+        taxon_prop()
+      ) 
+
+      # export
+      pt_pkg <- fs::path_package("transferice", "appdir", "cache")
+      saveRDS(out, fs::path(pt_pkg, nm, ext = "rds"))
+    })
+    
     # plot taxon
     output$spc <- renderPlot({
       
       req(input$taxa) # needs to be rendered first
       
-      taxon_plot(
-        taxon_prop(),
-        input$taxa,
-        "sample_id"
-      )
-      },
-      width = 250,
-      height = 250
+      taxon_plot(taxon_prop(), input$taxa, "sample_id")
+    },
+    width = 250,
+    height = 250
     )
 
     # reduce dimensions
@@ -164,7 +187,7 @@ explo_server <- function(id) {
       # selected variable
       selected_var <- paste(
         input$parm, # variable
-        temp[temp == input$temp], # temporal averaging
+        input$temp, # temporal averaging
         sep = "_"
       )
       
@@ -191,11 +214,26 @@ explo_server <- function(id) {
     
     # render controller based on tuning results
     output$control <- renderUI({
-        selectInput(
-          NS(id, "taxa"), 
-          "Taxa selection",
-          choices =  species_naming(pool, parms, dat = taxon_prop())
-        )
+      
+      # require
+      req(taxon_prop(), cancelOutput = TRUE)
+      
+      # filter zero columns
+      where <- tidyselect::vars_select_helpers$where
+      tx <- dplyr::select(
+        taxon_prop(), 
+        where(~sum(.x) > 0),
+        -c(.data$sample_id, .data$hole_id)
+      ) 
+      
+      # ids of available taxa
+      ids <- colnames(tx)
+ 
+      selectInput(
+        NS(id, "taxa"), 
+        "Taxa selection",
+        choices =  species_naming(pool, ids)
+      )
     }) 
   })
 }
@@ -206,4 +244,4 @@ temp <- c("annual", month.name, "winter", "spring", "summer", "autumn")
 temp <- abbreviate(temp, 2)
 
 # geographic window
-geo <- c("global" = "original", "southern" = "3031", "northern" = "3995")
+area <- c("global" = "original", "southern" = "3031", "northern" = "3995")

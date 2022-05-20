@@ -1,40 +1,75 @@
 # This function first searches in the cache dirs for the figure or movie before 
 # rendering it
-app_caching <- function(expr, type = "rds", file_name) {
-  
-  # check for cache dirs
-  cache_dir()
-  
-  # different pathways for different extensions
-  pt <- switch(
-    type,
-    rds = fs::path_package("transferice", "appdir", "cache", nm, ext = type)
-  )
+app_caching <- function(expr, type = "rds", file_name, width, height) {
 
   # check if file exists
-  try_file <- try(pt, silent = TRUE)
-  
-  if (inherits(cache_file, "try-error")) {
+  if (!fs::file_exists(fs::path(cache_dir(type), file_name))) {
     
-    out <- expr
+    # original function name
+    call_nm <- rlang::sym(rlang::call_name(substitute(expr)))
+    
+    # execute original function
+    out <- rlang::call_match(substitute(expr), eval(call_nm)) |> 
+      rlang::eval_tidy()
+    
+    # cache file
+    method_selector(file_name, out, type, width, height)
+    
   } 
   
+  # always return something (either `dateframe` or paths for images and videos)
+  method_selector(file_name, type = type)
   
 }
 
 # select method
-method_selector <- function(file_name, type = "rds", direction = "write",  
+method_selector <- function(file_name, file_out = NULL, type = "rds",  
                             width = NULL, height = NULL) {
   
+  pt <- fs::path(cache_dir(type), file_name, ext = type)
+  
+  if (is.null(file_out)) {
+    
+    switch(
+      type,    
+      # return data frame
+      rds = readRDS(pt),
+      # return path of image or video
+      png = ,
+      mkv = pt
+    )
+    
+  } else {
+    
+    switch(
+      type, 
+      rds = saveRDS(file_out, pt),
+      png = ggplot2::ggsave(
+        basename(pt),
+        plot = file_out, 
+        path = dirname(pt),
+        width = width,
+        height = height,
+        dpi = 72,
+        units = "px"
+      ),
+      mkv = gganimate::anim_save(
+        basename(pt), 
+        fps = 3,
+        animation = gganimate::animate(
+          file_out,        
+          renderer = gganimate::av_renderer(pt),
+          width = width,
+          height = height
+        ), 
+        path = dirname(pt),
+        width = width,
+        height = height
+      )
+    )
+  }
 }
 
-# select path
-path_selector <- function(file_name, type = "rds") {
-  switch(
-    type,
-    rds = fs::path_package("transferice", "appdir", "cache", file_name, ext = type)
-  )
-}
 
 # introduce filenaming convention
 file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocessed", 
@@ -56,27 +91,43 @@ file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocesse
 
 }
   
-# make surethat caching dirs exist  
-cache_dir <- function() {
+# make sure that caching dirs exist  
+cache_dir <- function(type = "rds") {
   
   # path to package
   pkg_path <- fs::path_package("transferice")
   
   # if directories don't exist then create them
-  
   # data 
-  if (!fs::dir_exists(fs::path(pkg_path, "appdir", "cache"))) {
-    fs::dir_create(pkg_path, "appdir", "cache")
+  if (type == "rds") {
+    
+    out <- fs::path(pkg_path, "appdir", "cache")
+    
+    if (!fs::dir_exists(out)) {
+      fs::dir_create(out)
+    }
   }
-  
+
+  # browser()
   # images
-  if (!fs::dir_exists(fs::path(pkg_path, "www", "img"))) {
-    fs::dir_create(pkg_path, "www", "img")
+  if (type == "png") {
+    
+    out <- fs::path(pkg_path, "www", "img")
+    
+    if (!fs::dir_exists(out)) {
+      fs::dir_create(out)
+    }
   }
   
   # videos
-  if (!fs::dir_exists(fs::path(pkg_path, "www", "vid"))) {
-    fs::dir_create(pkg_path, "www", "vid")
+  if (type == "mkv") {
+    
+    out <- fs::path(pkg_path, "www", "vid")
+    
+    if (!fs::dir_exists(out)) {
+      fs::dir_create(out)
+    }
   }
 
+  out
 }

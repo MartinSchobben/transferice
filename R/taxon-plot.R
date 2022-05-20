@@ -17,7 +17,7 @@ taxon_plot <- function(taxon, var, id, cutoff = 30) {
     # find highest n ranks
     rank =  rank(.data$odds),
     # make character
-    {{id}} := as.character(.data[[id]])
+    {{ id }} := as.character(.data[[id]])
   ) |> 
     dplyr::filter(.data$rank >= dplyr::n() - cutoff) 
 

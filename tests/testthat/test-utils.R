@@ -20,19 +20,27 @@ test_that("rows add to 1", {
 })
 
 test_that("species can be named",{
+  
   # connection
   dbpath <- fs::path_package(package = "transferice", "extdata", 
                              "transferice.sqlite")
   con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
   
-  # count data
-  prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con)
-  
   # get taxa names
-  expect_snapshot(species_naming(con, parms, dat = prop))
+  expect_snapshot(
+    species_naming(con)
+  )
+  
+  # get taxa names with id selection
+  expect_snapshot(
+    species_naming(con, c(83, 91))
+  )
+  
   # get ids
   tx <- c("Trinovantedinium pallidifulvum", "Polarella glacialis")
-  expect_snapshot(species_naming(con, parms, taxa_name = tx))
+  expect_snapshot(
+    species_naming(con, parms, taxa_name = tx)
+  )
   
   on.exit(DBI::dbDisconnect(con))
 })
