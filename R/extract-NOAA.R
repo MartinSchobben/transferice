@@ -1,12 +1,9 @@
 # wrapper function to extract coordinates from all environmental parameters
-extract_NOAA <- function(coords, averaging = "annual", depth = 30) {
+extract_NOAA <- function(NOAA, coords, depth = 30) {
   
-  # get NOAA averaged data for parameters on a 1 degree grid 
-  ls_data <- purrr::map(parms, ~oceanexplorer::get_NOAA(.x, 1, averaging))
-
   # get locations parameters
   ls_parms <- purrr::map(
-    ls_data, 
+    NOAA, 
     ~oceanexplorer::filter_NOAA(.x, depth = depth,  coord = coords)
   )
 

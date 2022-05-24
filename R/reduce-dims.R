@@ -22,7 +22,7 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
   eigenvectors <- dplyr::bind_cols(
     dplyr::select(props, any_of(id)),
     eigenvectors 
-    )
+  )
  
   # join with environmental data
   eigenvectors <- dplyr::left_join(eigenvectors, parm, by = id) 

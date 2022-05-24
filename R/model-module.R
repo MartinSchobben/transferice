@@ -169,7 +169,7 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id, data_id = "dinocyst_an_original") { # data id is based on query use R6 in future
+model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is based on query use R6 in future
   moduleServer(id, function(input, output, session) {
     
 #-------------------------------------------------------------------------------
