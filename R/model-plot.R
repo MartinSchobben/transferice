@@ -21,15 +21,7 @@
 #' 
 #' @export
 ggpartial <- function(obj, ...) { 
-  # path to package
-  pkg_path <- fs::path_package("transferice")
-  # if directories don't exist then create them
-  if (!fs::dir_exists(fs::path(pkg_path, "www", "img"))) {
-    fs::dir_create(pkg_path, "www", "img")
-  }
-  if (!fs::dir_exists(fs::path(pkg_path, "www", "vid"))) {
-    fs::dir_create(pkg_path, "www", "vid")
-  }
+  
   UseMethod("ggpartial")
 }
 #' @rdname ggpartial
@@ -41,11 +33,10 @@ ggpartial.mc_split <- function(
     pred = NULL, 
     tune = NULL, 
     out, 
-    type = "regression",
+    type = "xy",
     base_map = NULL,
-    return_type =  "plot", 
-    height = NA,
-    width = NA
+    return_type =  "plot",
+    id
   ) {
 
   # extract recipe
@@ -53,9 +44,9 @@ ggpartial.mc_split <- function(
   
   # predictor variable
   x <- pred_check(recipe, pred, tune)
-  
+
   # outcome variable
-  y <- rlang::ensym(out)
+  y <- out
   
   # fallback for no supplied tune with a tuned recipe
   dls <- hardhat::extract_parameter_set_dials(recipe)
@@ -72,95 +63,70 @@ ggpartial.mc_split <- function(
     recipes::bake(new_data = NULL)
   
   if (return_type == "cast") return(cast)
+
+  # plot y-axis label for the predicted values
+  y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
   
-  # file name
-  pred_nm <- sanitize_taxa(rlang::as_name(x))
+  
+  # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
-  nm <- paste("prep", type, recipe_specs, rlang::as_name(y), pred_nm, 
-              sep = "_") 
-     
-  ggpath <- try(
-    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
-    silent = TRUE
-  )
   
-  # if the file does not exist then render from scratch
-  if (inherits(ggpath, "try-error")) {
+  if (all(!isTruthy(pred), !isTruthy(recipe_specs))) {
+    x_lbl <- paste0("transform(", as_name(x), ")")
+  } else {
+    x_lbl <- as_name(x)
+  }
     
-    # plot y-axis label for the predicted values
-    y_lbl <- oceanexplorer::env_parm_labeller(
-      gsub("_.*$", "", rlang::as_name(y))
-    )
+  if (type == "spatial") {
     
-    if (!isTruthy(pred) & !isTruthy(recipe_specs)) {
-      x_lbl <- paste0("transform(", as_name(x), ")")
-    } else {
-      x_lbl <- as_name(x)
-    }
+    # get coordinates and turn into sf object
+    spat <- tibble::as_tibble(obj) |> 
+      dplyr::select(.data$longitude, .data$latitude)
+    cast <- dplyr::bind_cols(spat, cast) |> 
+      sf::st_as_sf(
+        coords = c("longitude", "latitude"), 
+        crs = sf::st_crs(base_map)
+      ) 
     
-    if (type == "spatial") {
-      
-      # get coordinates and turn into sf object
-      spat <- tibble::as_tibble(obj) |> 
-        dplyr::select(.data$longitude, .data$latitude)
-      cast <- dplyr::bind_cols(spat, cast) |> 
-        sf::st_as_sf(coords = c("longitude", "latitude"), crs = sf::st_crs(base_map)) 
-      
-      # plot
-      p <- oceanexplorer::plot_NOAA(
-        base_map,
-        rng = range(base_map[[1]], na.rm = TRUE)
-      ) + 
-        ggplot2::geom_sf(
-          data= cast,
-          # discretise abundance data
-          mapping = ggplot2::aes(
-            color =
-              ggplot2::cut_interval(
-                .data[[!!x]],
-                3,
-                labels = c("low", "mid", "high")
-              )
+    # plot
+    p <- oceanexplorer::plot_NOAA(
+      base_map,
+      rng = range(base_map[[1]], na.rm = TRUE)
+    ) + 
+      ggplot2::geom_sf(
+        data= cast,
+        # discretise abundance data
+        mapping = ggplot2::aes(
+          color =
+            ggplot2::cut_interval(
+              .data[[!!x]],
+              3,
+              labels = c("low", "mid", "high")
             )
-        ) +
-        ggplot2::scale_color_manual(
-          as_name(x),
-          values = c("#fff7bc", "#fec44f", "#d95f0e"),
-          guide = ggplot2::guide_legend(title.position = "top")
-        ) + 
-        ggplot2::coord_sf(
-          xlim = c(-180, 180),
-          ylim = c(-90, 90),
-          default_crs = sf::st_crs(base_map),
-          crs = sf::st_crs(base_map),
-          expand = FALSE
-      )
-    } else if (type == "regression") {
-    
-      # plot
-      p <- ggbase(cast, x, y, id = FALSE)  + 
-        ggplot2::labs(title = 'Feature engineering', y = y_lbl, x = x_lbl)
-    
-    }
-    
-    # add theme
-    p <- p + transferice_theme() 
-    
-    # saving
-    ggplot2::ggsave(
-      fs::path(nm, ext = "png"),
-      plot = p, 
-      path = fs::path_package(package = "transferice", "www", "img"),
-      width = if (type == "regression") height else width,
-      height = if (type == "regression") height else height,
-      dpi = 72,
-      units = "px"
+          )
+      ) +
+      ggplot2::scale_color_manual(
+        as_name(x),
+        values = c("#fff7bc", "#fec44f", "#d95f0e"),
+        guide = ggplot2::guide_legend(title.position = "top")
+      ) + 
+      ggplot2::coord_sf(
+        xlim = c(-180, 180),
+        ylim = c(-90, 90),
+        default_crs = sf::st_crs(base_map),
+        crs = sf::st_crs(base_map),
+        expand = FALSE
     )
-    
-  } 
-  # depending whether the figure is newly rendered this function executes 
-  # fast or slow
-  fs::path_package("transferice", "www", "img", nm, ext = "png") 
+  } else if (type == "xy") {
+
+    # plot
+    p <- ggbase(cast, x, y, id = FALSE)  + 
+      ggplot2::labs(title = 'Feature engineering', y = y_lbl, x = x_lbl)
+  
+  }
+  
+  # add theme and return
+  p + transferice_theme() 
 }
 #' @rdname ggpartial
 #' 
@@ -171,23 +137,23 @@ ggpartial.tune_results <- function(
     pred = NULL, 
     tune = NULL, 
     out, 
-    type = "regression", 
+    type = "xy", 
     base_map = NULL, 
-    plot_type =  "dynamic", 
-    mc_cores = 4,
-    renderer = "mkv",
-    height = NA,
-    width = NA
+    plot_type =  "dynamic",
+    id
   ) {
   
   # memoised partials function
-  partials <- cv_model_extraction(obj, workflow)
+  nm <- file_namer("rds", "training", id, "partial_models", trans = sanitize_workflow(workflow))
+  partials <- cv_model_extraction(obj) |> 
+    app_caching("rds", nm) # caching
   
+
   # predictor variable
   x <- pred_check(obj, pred, tune)
 
   # outcome variable
-  y <- rlang::enquo(out) 
+  y <- out 
   
   # check for base_map
   if (!isTruthy(base_map) & type == "spatial") {
@@ -211,166 +177,72 @@ ggpartial.tune_results <- function(
   ) 
   
   # plot y-axis label for the predicted values
-  lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", rlang::as_name(y)))
+  lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
   
-  # name file 
-  pred_nm <- sanitize_taxa(rlang::as_name(x))
-  workflow_specs <- sanitize_workflow(workflow)
-  nm <- paste("folds", type, workflow_specs, rlang::as_name(y), pred_nm, 
-              sep = "_") 
-  
-  # potential paths
-  if (plot_type == "dynamic") {
+  # determine type of statistics and build plot base
+  if (type == "spatial") {
     
-    ggpath <- try(
-      fs::path_package("transferice", "www", "vid", nm, ext = renderer), 
-      silent = TRUE
+    # original data
+    origin <- dplyr::transmute(
+      partials, 
+      origin = purrr::map(splits, tibble::as_tibble)
+    ) 
+
+    # spatial interpolation for each fold
+    # make parallel
+    z <- parallel::mcMap(
+      interpolate_model, 
+      origin = origin$origin, 
+      output = output$.output, 
+      MoreArgs = rlang::inject(list(y = !!y, base_map = base_map)),
+      mc.cores = mc_cores 
     )
-    
-  } else if (plot_type == "static") {
-    
-    ggpath <- try(
-      fs::path_package("transferice", "www", "img", nm, ext = "png"), 
-      silent = TRUE
-    )
-    
-  }
+
+    st <- rlang::inject(c(!!!z, nms = output$id)) # combine and rename
+    st = merge(st) # collapse to dimension
+    names(st) = rlang::as_name(y) # rename
+      
+    # plot
+    p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) 
+
+  } else if (type == "xy") {
   
-  # if the file does not exist then render from scratch
-  if (inherits(ggpath, "try-error")) {
-    
-    # determine type of statistics and build plot base
-    if (type == "spatial") {
-      # original data
-      origin <- dplyr::transmute(
-        partials, 
-        origin = purrr::map(splits, tibble::as_tibble)
+    # prepare data
+    part <- tidyr::unnest(partials,  cols = .data$.input) |> 
+      dplyr::select(-c(.data$splits, .data$.extracts))
+    output <- tidyr::unnest(output, cols = .data$.output) |> 
+      dplyr::select(-.data$id)
+    comb <- dplyr::bind_cols(part, output)
+
+    # plot
+    p <- ggbase(comb, x, y, id = TRUE)  + 
+      ggplot2::geom_line(
+        mapping = ggplot2::aes(
+          y = .data[[!!rlang::sym(paste0(".pred_",  y))]]
+          ),
+        linetype = 2,
+        color = "blue"
       ) 
-  
-      # spatial interpolation for each fold
-      # make parallel
-      z <- parallel::mcMap(
-        interpolate_model, 
-        origin = origin$origin, 
-        output = output$.output, 
-        MoreArgs = rlang::inject(list(y = !!y, base_map = base_map)),
-        mc.cores = mc_cores 
-      )
-  
-      st <- rlang::inject(c(!!!z, nms = output$id)) # combine and rename
-      st = merge(st) # collapse to dimension
-      names(st) = rlang::as_name(y) # rename
-        
-      # plot
-      p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) 
-
-    } else if (type == "regression") {
-    
-      part <- tidyr::unnest(partials,  cols = .data$.input) |> 
-        dplyr::select(-c(.data$splits, .data$.extracts))
-      output <- tidyr::unnest(output, cols = .data$.output) |> 
-        dplyr::select(-.data$id)
-      comb <- dplyr::bind_cols(part, output)
-  
-      # plot
-      p <- ggbase(comb, x, y, id = TRUE)  + 
-        ggplot2::geom_line(
-          mapping = ggplot2::aes(
-            y = .data[[!!rlang::sym(paste0(".pred_",  rlang::as_name(y)))]]
-            ),
-          linetype = 2,
-          color = "blue"
-        ) 
-    } 
-
-    if (plot_type  == "dynamic") {
-    
-      if (type == "spatial") {
-        
-        p <- p+ gganimate::transition_states(attributes) +
-          ggplot2::labs(title = 'Predicted values ({closest_state})')
-        
-      } else  if (type == "regression") {
-        
-        p <- p + gganimate::transition_states(.data$id) + 
-          ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
-
-      }
-    
-      # choose renderer 
-      if (renderer == "gif") {
-        renderer_fn <- gganimate::magick_renderer() 
-      } else if (renderer == "mkv") {
-        renderer_fn <- gganimate::av_renderer(fs::path(nm, ext = renderer))
-      } else {
-        stop("Unkown renderer.", call. = FALSE)
-      }
-      
-        # add theme
-        p <- p + transferice_theme() 
-      
-        # parallel (relies on Bengston PR: https://github.com/thomasp85/gganimate/pull/403)
-        # future::plan("multicore", workers = 6L)
-        # render
-        p <- gganimate::animate(
-          p,        
-          renderer =  renderer_fn,
-          width = if (type == "regression") height else width,
-          height = if (type == "regression") height else height
-        )
-        
-    
-        # saving
-        gganimate::anim_save(
-          fs::path(nm, ext = renderer), 
-          fps = 3,
-          animation = p, 
-          path = fs::path_package(package = "transferice", "www", "vid"),
-          width = if (type == "regression") height else width,
-          height = if (type == "regression") height else height
-        )
-        
-    } else if (plot_type == "static") {
-      
-      if (type == "spatial") { 
-        p <- p + ggplot2::facet_wrap(ggplot2::vars(.data$attributes)) + 
-          ggplot2::labs(title = "Partial regressions")
-        
-      } else if (type == "regression") {
-          
-        p <- p + ggplot2::facet_wrap(ggplot2::vars(.data$id)) + 
-          ggplot2::labs(title = 'Partial regressions', y = lbl)
-
-      }
-      
-      # add theme
-      p <- p + transferice_theme() 
-    
-      # saving
-      ggplot2::ggsave(
-        fs::path(nm, ext = "png"),
-        plot = p, 
-        path = fs::path_package(package = "transferice", "www", "img"),
-        width = if (type == "regression") height else width,
-        height = if (type == "regression") height else height,
-        dpi = 72,
-        units = "px"
-      )
-    
-    } 
   } 
-    
-  # depending whether the figure is newly rendered this function executes 
-  # fast or slow
-  if (plot_type == "static") {
-    
-    fs::path("img", nm, ext = "png") 
-    
-  } else if (plot_type == "dynamic") {
-    
-    fs::path("vid", nm, ext = renderer)  
-    
+
+  if (plot_type  == "dynamic") {
+  
+    if (type == "spatial") {
+      
+      p <- p + gganimate::transition_states(attributes) +
+        ggplot2::labs(title = 'Predicted values ({closest_state})')
+      
+    } else  if (type == "xy") {
+      
+      p <- p + gganimate::transition_states(.data$id) + 
+        ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
+
+    }
   }
+
+  # add theme
+  p + transferice_theme() 
+
 }
 #' @rdname ggpartial
 #' 
@@ -384,20 +256,21 @@ ggpartial.last_fit <- function(
     type = "regression",
     base_map = NULL,
     height = NA,
-    width = NA
+    width = NA,
+    id
 ) {
   
   # predictor variable
   x <- pred_check(obj, pred, tune)
   
   # outcome variable
-  y <- rlang::ensym(out) 
+  y <- out
   
   # extract averaging
-  averaging <- gsub("^(.)*_", "", as_name(y))
+  averaging <- gsub("^(.)*_", "", y)
   
   # parameter of interest
-  pm <- as_name(y)
+  pm <- y
   
   # all parameters
   pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 

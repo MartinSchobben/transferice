@@ -125,6 +125,11 @@ test_that("caching works", {
     method_selector(nm, type = "rds")
   )
   
+  nm <- file_namer("png", "raw", "dinocyst_annual_global", viz ="xy", y = "count", x = "22")
+  
+  p <- taxon_plot(prop, "22", "sample_id") |> 
+    app_caching("png", nm, width = 400, height =400)
+  
   on.exit(DBI::dbDisconnect(con))
 })
 

@@ -33,13 +33,13 @@ test_that("partial regressions can be plotted with tuning", {
   # inspect feature engineering
   vdiffr::expect_doppelganger(
     "feature engineering",
-    ggpartial(splt, wfl, tune = 1, out = t_an)
+    ggpartial(splt, wfl, tune = 1, out = "t_an")
   )
   
   # inspect feature engineering (on map)
   vdiffr::expect_doppelganger(
     "feature engineering",
-    ggpartial(splt, wfl, tune = 1, out = n_an, type = "spatial", base_map = base)
+    ggpartial(splt, wfl, tune = 1, out = "n_an", type = "spatial", base_map = base)
   )
   
   # what happens if `pred` is supplied with a tuned recipe?
@@ -51,7 +51,7 @@ test_that("partial regressions can be plotted with tuning", {
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(tuned_cv, wfl, tune = 1, out = t_an, plot_type = "static")
+    ggpartial(tuned_cv, wfl, tune = 1, out = "t_an", plot_type = "static")
   )
   
   vdiffr::expect_doppelganger(

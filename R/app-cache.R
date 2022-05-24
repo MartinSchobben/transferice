@@ -1,16 +1,20 @@
 # This function first searches in the cache dirs for the figure or movie before 
 # rendering it
-app_caching <- function(expr, type = "rds", file_name, width, height) {
-
+app_caching <- function(cache, type = "rds", file_name, width, height) {
+  
   # check if file exists
-  if (!fs::file_exists(fs::path(cache_dir(type), file_name))) {
+  if (!fs::file_exists(fs::path(cache_dir(type), file_name, type))) {
+   
+    # defuse
+    cache <- rlang::enquo(cache)
     
-    # original function name
-    call_nm <- rlang::sym(rlang::call_name(substitute(expr)))
-    
-    # execute original function
-    out <- rlang::call_match(substitute(expr), eval(call_nm)) |> 
-      rlang::eval_tidy()
+    # check
+    if (!rlang::quo_is_call(cache)) {
+      stop("A function call needs to be supplied.", call. = FALSE)
+    }
+                          
+    # execute
+    out <- rlang::eval_tidy(cache)
     
     # cache file
     method_selector(file_name, out, type, width, height)
@@ -40,7 +44,8 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
     )
     
   } else {
-    
+
+
     switch(
       type, 
       rds = saveRDS(file_out, pt),
@@ -58,7 +63,7 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
         fps = 3,
         animation = gganimate::animate(
           file_out,        
-          renderer = gganimate::av_renderer(pt),
+          renderer = gganimate::av_renderer(basename(pt)),
           width = width,
           height = height
         ), 
@@ -75,7 +80,7 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
 file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocessed", 
                        viz = NULL, y = NULL, x = NULL) {
   
-  stopifnot(prefix %in% c("raw", "prep", "train", "final"))
+  stopifnot(prefix %in% c("raw", "engineering", "training", "validation"))
   if (type != "rds") stopifnot(viz %in% c("spatial", "xy"))
   if (type != "rds") stopifnot(all(!is.null(viz), !is.null(y), !is.null(x)))
   
