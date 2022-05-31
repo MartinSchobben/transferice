@@ -51,24 +51,26 @@ test_that("partial regressions can be plotted with tuning", {
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(tuned_cv, wfl, tune = 1, out = "t_an", plot_type = "static")
+    ggpartial(tuned_cv, wfl, tune = 1, out = "t_an", plot_type = "static", 
+              id = "dinocyst_annual_global")
   )
   
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(tuned_cv, wfl, tune = 1, out = n_an, type = "spatial", 
-              base_map = base, plot_type = "static")
+    ggpartial(tuned_cv, wfl, tune = 1, out = "n_an", type = "spatial", 
+              base_map = base, plot_type = "static", 
+              id = "dinocyst_annual_global")
   )
   
   # final fit
   vdiffr::expect_doppelganger(
     "final fit regression",
-    ggpartial(final, wfl, tune = 1, out = t_an)
+    ggpartial(final, wfl, tune = 1, out = "t_an")
   )
   
   vdiffr::expect_doppelganger(
     "final fit spatial",
-    ggpartial(final, wfl, tune = 1, out = n_an, type = "spatial", 
+    ggpartial(final, wfl, tune = 1, out = "n_an", type = "spatial", 
               base_map = base)
   )
 })

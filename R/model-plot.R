@@ -140,11 +140,13 @@ ggpartial.tune_results <- function(
     type = "xy", 
     base_map = NULL, 
     plot_type =  "dynamic",
-    id
+    id,
+    mc_cores = 2
   ) {
   
   # memoised partials function
-  nm <- file_namer("rds", "training", id, "partial_models", trans = sanitize_workflow(workflow))
+  nm <- file_namer("rds", "training", id, "partial_models", 
+                   trans = sanitize_workflow(workflow))
   partials <- cv_model_extraction(obj) |> 
     app_caching("rds", nm) # caching
   
@@ -194,7 +196,7 @@ ggpartial.tune_results <- function(
       interpolate_model, 
       origin = origin$origin, 
       output = output$.output, 
-      MoreArgs = rlang::inject(list(y = !!y, base_map = base_map)),
+      MoreArgs = list(y = y, base_map = base_map),
       mc.cores = mc_cores 
     )
 
@@ -253,133 +255,93 @@ ggpartial.last_fit <- function(
     pred = NULL, 
     tune = NULL, 
     out, 
-    type = "regression",
+    type = "xy",
     base_map = NULL,
-    height = NA,
-    width = NA,
     id
 ) {
   
   # predictor variable
   x <- pred_check(obj, pred, tune)
   
-  # outcome variable
-  y <- out
-  
   # extract averaging
-  averaging <- gsub("^(.)*_", "", y)
-  
-  # parameter of interest
-  pm <- y
-  
+  averaging <- gsub("^(.)*_", "", out)
+
   # all parameters
   pms <- paste(abbreviate_vars(parms), averaging, sep = "_") 
   
   # name file, plot title and potential path
-  parsed_pm <- parms[abbreviate_vars(parms) == gsub("_(.)*$", "", pm)]
+  parsed_pm <- parms[abbreviate_vars(parms) == gsub("_(.)*$", "", out)]
   ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
   ttl_spat <- paste0("Difference in prediction")
   
-  # name
-  workflow_specs <- sanitize_workflow(workflow)
-  nm <- paste("final", type, workflow_specs, pm, x, sep = "_") 
+  # extract predictions
+  preds <- tune::collect_predictions(obj)
   
-  # potential path
-  ggpath <- try(
-    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
-    silent = TRUE
-  )
+  if (type == "spatial") {
+    
+    # original data
+    origin <- dplyr::transmute(
+      obj, 
+      origin = purrr::map(splits, rsample::testing)
+    ) |> 
+      tidyr::unnest(cols = c(origin))
+    # predictions
+    output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
+    # interpolate
+    z <- interpolate_model(origin, output, !! rlang::sym(out), base_map)
+      
+    # difference on raster (predicted - truth)
+    z <- z - base_map
+    names(z) = out # rename
+    
+    # label
+    lbl <- oceanexplorer::env_parm_labeller(out, prefix = "Delta")
+      
+    # plot 
+    p <- oceanexplorer::plot_NOAA(z) +
+      ggplot2::scale_fill_gradient2(lbl) +
+      ggplot2::ggtitle(ttl_spat)
+      
+  } else if (type == "xy") {
+      
+    # rename original true values
+    obj <- dplyr::rename_with(
+      preds, 
+      .cols = dplyr::any_of(pms), 
+      .fn = ~paste0(".truth_", .x)
+    )
+    
+    # pivot to long format
+    long_obj <-tidyr::pivot_longer(
+      obj,
+      cols = dplyr::ends_with(paste0("_", averaging)),
+      names_to = c(".value", "parameter"),
+      names_pattern = paste0("(.*)_(._", averaging ,")")
+    )
+   
+    # check if param exists
+    chk <- out %in% unique(long_obj$parameter)
+    if (!chk) stop("Selected parameter does not exist in data.", 
+                   call. = FALSE)
+      
+    long_obj <- dplyr::filter(long_obj, .data$parameter == out)
   
-  if (inherits(ggpath, "try-error")) {
-    
-    # extract predictions
-    preds <- tune::collect_predictions(obj)
-    
-    if (type == "spatial") {
-      
-      # original data
-      origin <- dplyr::transmute(
-        obj, 
-        origin = purrr::map(splits, rsample::testing)
-      ) |> 
-        tidyr::unnest(cols = c(origin))
-      # predictions
-      output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
-      # interpolate
-      z <- interpolate_model(origin, output, !! rlang::sym(pm), base_map)
-      
-      # difference on raster (predicted - truth)
-      z <- z - base_map
-      names(z) = pm # rename
-      
-      # label
-      lbl <- oceanexplorer::env_parm_labeller(as_name(y), prefix = "Delta")
-      
-      # plot 
-      p <- oceanexplorer::plot_NOAA(z) +
-        ggplot2::scale_fill_gradient2(lbl) +
-        ggplot2::ggtitle(ttl_spat)
-      
-    } else if (type == "regression") {
-      
-      # rename original true values
-      obj <- dplyr::rename_with(
-        preds, 
-        .cols = dplyr::any_of(pms), 
-        .fn = ~paste0(".truth_", .x)
+    p <- ggplot2::ggplot(
+      data = long_obj, 
+      mapping = ggplot2::aes(x = .data$.truth, y = .data$.pred)
+    ) +  
+      ggplot2::geom_point(alpha = 0.3) +  
+      ggplot2::geom_abline(color = 'blue', linetype = 2) +
+      ggplot2::labs(
+        title = ttl_reg,       
+        y = 'Predicted',        
+        x = 'Actual'
       )
-      
-      # pivot to long format
-      long_obj <-tidyr::pivot_longer(
-        obj,
-        cols = dplyr::ends_with(paste0("_", averaging)),
-        names_to = c(".value", "parameter"),
-        names_pattern = paste0("(.*)_(._", averaging ,")")
-      )
-      
-      # check if param exists
-      chk <- pm %in% unique(long_obj$parameter)
-      if (!chk) stop("Selected parameter does not exist in data.", 
-                     call. = FALSE)
-      long_obj <- dplyr::filter(long_obj, .data$parameter == pm)
-      
-      p <- ggplot2::ggplot(
-        data = long_obj, 
-        mapping = ggplot2::aes(x = .data$.truth, y = .data$.pred)
-      ) +  
-        ggplot2::geom_point(alpha = 0.3) +  
-        ggplot2::geom_abline(color = 'blue', linetype = 2) +
-        ggplot2::labs(
-          title = ttl_reg,       
-          y = 'Predicted',        
-          x = 'Actual'
-        )
-      
-      # if (selected == "all") {
-      #   p <- p + ggplot2::facet_wrap(ggplot2::vars(parameter), scales = "free") 
-      # } else {
-      #   p <- p
-      # }
     }
   
     # add theme
-    p <- p + transferice_theme() 
+    p + transferice_theme() 
     
-    # save plot
-    ggplot2::ggsave(
-      fs::path(nm, ext = "png"),
-      plot = p, 
-      path = fs::path_package(package = "transferice", "www", "img"),
-      width = if (type == "regression") height else width,
-      height = if (type == "regression") height else height,
-      dpi = 72,
-      units = "px"
-    )
-  }
-  
-  # depending whether the figure is newly rendered this function executes 
-  # fast or slow
-  fs::path_package("transferice", "www", "img", nm, ext = "png") 
 }
 
 #-------------------------------------------------------------------------------
@@ -389,22 +351,22 @@ ggpartial.last_fit <- function(
 # predictor variable (either for tuning or just inspection)
 pred_check <- function(dat, pred, tune) {
   
-  if (!isTruthy(pred) & !isTruthy(tune)) {
+  if (all(!isTruthy(pred),  !isTruthy(tune))) {
     stop(paste("Either `pred` or `tune` needs to be supplied!"), call. = FALSE)
   }
   
   if (inherits(dat, "recipe")) {
     # check if recipe has tune dials
     dls <- hardhat::extract_parameter_set_dials(dat)$name
-    if (length(dls) == 0 & !isTruthy(pred)) {
+    if (all(length(dls) == 0, !isTruthy(pred))) {
       stop(paste("The model has NOT been tuned and therefore `pred` needs to be", 
                  "supplied!"), call. = FALSE)    
-    } else  if (length(dls) == 0 & isTruthy(pred)) {
+    } else  if (all(length(dls) == 0, isTruthy(pred))) {
       x <- rlang::ensym(pred) 
-    } else if (length(dls) > 0 & !isTruthy(tune)) {
+    } else if (all(length(dls) > 0, !isTruthy(tune))) {
       stop(paste("The model has been tuned and therefore `tune` needs to be", 
                  "supplied!"), call. = FALSE)
-    } else if (length(dls) > 0 & isTruthy(tune)) {
+    } else if (all(length(dls) > 0, isTruthy(tune))) {
       x <- rlang::sym(paste0("PC", tune))
     }
     
@@ -433,15 +395,15 @@ pred_check <- function(dat, pred, tune) {
       # check if results are tuned (class 'resample_results' is not tuned)
       nottuned <- inherits(dat, 'resample_results')
       
-      if (nottuned & !isTruthy(pred)) {
+      if (all(nottuned, !isTruthy(pred))) {
         stop(paste("The model has NOT been tuned and therefore `pred` needs to", 
                    " be supplied!"), call. = FALSE)    
-      } else  if (nottuned & isTruthy(pred)) {
+      } else  if (all(nottuned, isTruthy(pred))) {
         x <- rlang::ensym(pred) 
-      } else if (!nottuned & !isTruthy(tune)) {
+      } else if (all(!nottuned, !isTruthy(tune))) {
         stop(paste("The model has been tuned and therefore `tune` needs to be", 
                    "supplied!"), call. = FALSE)
-      } else if (!nottuned& isTruthy(tune)) {
+      } else if (all(!nottuned, isTruthy(tune))) {
         x <- rlang::sym(paste0("PC", tune))
       }
     }

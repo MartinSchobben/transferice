@@ -4,7 +4,7 @@
 \name{transferice-package}
 \alias{transferice}
 \alias{transferice-package}
-\title{transferice: Reconstruct sea ice dynamics with dinocyst assemblages.}
+\title{transferice: Reconstructing the Past with Fossil Assemblages.}
 \description{
 What the package does (one paragraph).
 }

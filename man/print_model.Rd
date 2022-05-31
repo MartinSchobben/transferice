@@ -11,7 +11,15 @@ print_model(obj, ...)
 
 \method{print_model}{mc_split}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 
-\method{print_model}{tune_results}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
+\method{print_model}{tune_results}(
+  obj,
+  workflow,
+  pred = NULL,
+  tune = NULL,
+  out = NULL,
+  height = NULL,
+  width = NULL
+)
 
 \method{print_model}{last_fit}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 }

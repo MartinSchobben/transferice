@@ -3,7 +3,7 @@
 app_caching <- function(cache, type = "rds", file_name, width, height) {
   
   # check if file exists
-  if (!fs::file_exists(fs::path(cache_dir(type), file_name, type))) {
+  if (!fs::file_exists(fs::path(cache_dir(type), file_name, ext = type))) {
    
     # defuse
     cache <- rlang::enquo(cache)
@@ -39,8 +39,8 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
       # return data frame
       rds = readRDS(pt),
       # return path of image or video
-      png = ,
-      mkv = pt
+      png = pt,
+      mkv = fs::path("vid", basename(pt))
     )
     
   } else {

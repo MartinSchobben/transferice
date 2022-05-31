@@ -21,7 +21,7 @@ test_that("file naming conventions work", {
 test_that("dir is created", {
   
   # path package
-  pkg <-fs::path_package("transferice")
+  pkg <- fs::path_package("transferice")
   
   # do they exist?
   expect_true(
@@ -45,6 +45,7 @@ test_that("method for saving are selected", {
   dbpath <- fs::path_package(package = "transferice", "extdata", 
                              "transferice.sqlite")
   con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
+  
   # count data
   prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con)
   
@@ -53,6 +54,7 @@ test_that("method for saving are selected", {
   
   # save file
   method_selector(nm, prop, "rds")
+  
   expect_true(
     fs::file_exists(fs::path(pkg, "appdir", "cache", nm, ext = "rds"))
   )

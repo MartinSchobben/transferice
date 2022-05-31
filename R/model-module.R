@@ -469,6 +469,8 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     },
     deleteFile = FALSE
     )
+    
+    observe(message(glue::glue("{file$path}")))
     # CV animations
     output$part  <- renderUI({
       req(file$path)
@@ -481,6 +483,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
         loop = TRUE
       )
     })
+    
     # final model image
     output$final <- renderImage({
       req(file$path)
