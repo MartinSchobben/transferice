@@ -102,14 +102,6 @@
       "Hash": "45f0398006e83a5b10b72a90663d8d8c",
       "Requirements": []
     },
-    "RNetCDF": {
-      "Package": "RNetCDF",
-      "Version": "2.5-2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "1d4377a84cdc0cd810d127071339c2b9",
-      "Requirements": []
-    },
     "RSQLite": {
       "Package": "RSQLite",
       "Version": "2.2.14",
@@ -1181,20 +1173,6 @@
         "colorspace"
       ]
     },
-    "ncmeta": {
-      "Package": "ncmeta",
-      "Version": "0.3.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "01619645794f6fcaf023d5fa27f39f14",
-      "Requirements": [
-        "RNetCDF",
-        "dplyr",
-        "rlang",
-        "tibble",
-        "tidyr"
-      ]
-    },
     "nlme": {
       "Package": "nlme",
       "Version": "3.1-157",
@@ -1234,10 +1212,14 @@
     "oceanexplorer": {
       "Package": "oceanexplorer",
       "Version": "0.0.0.9002",
-      "Source": "Local",
-      "RemoteType": "local",
-      "RemoteUrl": "/home/nicola/Documents/work/code/oceanexplorer",
-      "Hash": "437c56e56ac96fa72f2a585fcc102e24",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "oceanexplorer",
+      "RemoteUsername": "UtrechtUniversity",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "c352b28c95e84a9d887f8c78e14ce617e080db59",
+      "Hash": "e005e0ab698428bf57214b37b1fd77e1",
       "Requirements": [
         "DT",
         "bslib",
@@ -1247,7 +1229,6 @@
         "glue",
         "maps",
         "miniUI",
-        "ncmeta",
         "purrr",
         "rlang",
         "rstudioapi",

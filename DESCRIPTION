@@ -53,6 +53,7 @@ Depends:
     R (>= 2.10)
 StagedInstall: no
 LazyData: true
-Remotes: 
+Remotes:  
     UtrechtUniversity,
-    MartinSchobben
+    MartinSchobben,
+    UtrechtUniversity
