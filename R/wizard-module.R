@@ -9,40 +9,16 @@
 #' @export
 wizard_ui <- function(id, tabs) {
   
-  # header <- tags$head(
-  #             tags$style(
-  #               HTML("
-  #               .footer {
-  #                 position: absolute;
-  #                 bottom: 0;
-  #                 width: 100%;
-  #                 height: 80px; /* Set the fixed height of the footer here */
-  #                 background-color: #e5e5e5;
-  #                }"
-  #               )
-  #             )
-  #           )
 
   # create tabs
   tabs <- tab_creator(id, tabs)
-  # create tab panel
-  # tagList(
-  #   header,
-
-  # tabsetPanel(
-  #   id = NS(id, "wizard"),
-  #   type = "hidden",
-  #   !!! tabs
-  # ),
   
-  navbarPage(
-    title = div("Transferice", style ="text-align: center;"),
+  # create tab panel
+  tabsetPanel(
     id = NS(id, "wizard"),
-    !!!tabs,
-    position = "fixed-bottom",
-    inverse = TRUE
+    type = "hidden",
+    !!! tabs
   )
-
 }
 #' @rdname wizard_ui
 #'
@@ -63,7 +39,13 @@ wizard_server <- function(id, n) {
 
   # go back
   purrr::map(seq_len(n)[-n], ~switch_tab(.x, .x + 1))
-
+  
+  # color
+  # clr <- thematic::thematic_get_theme()$sequential[1]
+  # 
+  # observe(message(paste0("background-color:", clr, ";")))
+  
+  
   })
 }
 
@@ -73,40 +55,43 @@ tab_creator <- function(id, tabs) {
 
   # function to populate tab pane with buttons
   tab_buttons <- function(a, b, c, tab, title, id) {
-    tabPanel(
-      "",
+    tabPanelBody(
       value = paste0("page_", a),
-      fluidRow(column(12, tab)),
-      # 
-      # 
-      #           column(
-      #             6,
-                   if (!is.na(b))
-                    absolutePanel(
-                      div(
-                      actionButton(NS(id, paste0("page_", a, b)), "prev"),
-                      align = "left"
-                    ),
-                    bottom = 15,
-                    left = 15,
-                    fixed = TRUE
-                  ),
-                # ),
-                # column(
-                #   6,
-                  if (!is.na(c))
-                    absolutePanel(
-                      div(
-                        actionButton(NS(id, paste0("page_", a, c)), "next"),
-                        align = "right"
-                      ),
-                      bottom = 15,
-                      right = 15,
-                      fixed = TRUE
-                    )
-              #   )
-              )
-    
+      fluidRow(column(width = 12, tab)),
+      fluidRow(
+        width = 12, 
+        tags$hr(),
+        fixedPanel(
+          style = paste0("background-color:", grDevices::grey(0.8), ";"), 
+          bottom = 0, 
+          left = 0, 
+          right = 0,
+          height = 100
+        )
+      ),
+      fluidRow(
+        column(
+          width = 6,
+          if (!is.na(b))
+            fixedPanel(
+              actionButton(NS(id, paste0("page_", a, b)), "prev"),
+              bottom = 25, 
+              left = 25,
+              height = 50
+            )
+        ),
+        column(
+          width = 6,
+          if (!is.na(c))
+            fixedPanel(
+              actionButton(NS(id, paste0("page_", a, c)), "next"),
+              bottom = 25, 
+              right = 25,
+              height = 50
+            )
+        )
+      )
+    )
   }
   # execute function
   purrr::pmap(
