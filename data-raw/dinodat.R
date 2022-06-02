@@ -4,8 +4,7 @@
 dbpath <- fs::path_package(package = "transferice", "extdata", 
                            "transferice.sqlite")
 con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
-dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", 
-                             "neptune_taxonomy", con) 
+dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con) 
 # environment
 locs <- DBI::dbGetQuery(
   con, 
@@ -34,7 +33,7 @@ pts <- setNames(as.list(crd), nm = c("lon", "lat"))
 ls_parms <- purrr::map(
   ls_data, 
   ~oceanexplorer::filter_NOAA(.x, depth = 30,  coord = pts)
-  )
+)
 
 # make normal tibble
 reduce_sf <- function(parms) {
@@ -49,6 +48,9 @@ reduce_sf <- function(parms) {
 environ_dat <- dplyr::bind_cols(locs, reduce_sf(ls_parms)) |> 
   dplyr::select(-c(.data$site))
 
+# save data
+usethis::use_data(environ_dat , overwrite = TRUE)
+
 # ------------------------------------------------------------------------------
 # dinocysts
 # ------------------------------------------------------------------------------
@@ -57,7 +59,7 @@ dinodat <- dplyr::left_join(
   environ_dat, 
   dino_prop, 
   by = c("hole_id", "sample_id")
-  ) |> 
+) |> 
   # remove NAs
   tidyr::drop_na() 
   

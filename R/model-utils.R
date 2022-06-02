@@ -6,13 +6,13 @@ formula_parser <- function(
     dat, 
     parms, 
     averaging = "an",
-    remove = c("sample_id", "longitude", "latitude", "hole_id"),
+    remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth"),
     type = "ordinary"
   ) {
   
   averaging <- paste0("_", averaging)
 
-  if (type ==  "tidymodels") {
+  if (type ==  "ordinary") {
     
     # parameter names
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = "+")
@@ -25,7 +25,7 @@ formula_parser <- function(
     # formula
     as.formula(paste0(pms, "~", dns))
     
-  } else if (type == "base") {
+  } else if (type == "tidymodels") {
     
     # parameter names
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = ",")
@@ -33,8 +33,7 @@ formula_parser <- function(
     # need to rewrite formula as parsnip does not accept multivariate model
     as.formula(paste0("cbind(", pms, ")~."))
     
-  } 
-  #else if (type == )
+  }
 }
 
 transferice_recipe <- function(
@@ -43,9 +42,8 @@ transferice_recipe <- function(
     dim_reduction = NULL, 
     tunable = TRUE, 
     averaging = "an", 
-    remove = c("sample_id", "longitude", "latitude", "hole_id")
+    remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth")
   ) {
-
 
   # formula
   fml <- formula_parser(dat, parms, averaging, remove)
@@ -78,74 +76,39 @@ transferice_recipe <- function(
 
 transferice_tuning <- function(split, wfl) {
   
-  # path to package
-  pkg_path <- fs::path_package("transferice")
-  # if directories don't exist then create them
-  if (!fs::dir_exists(fs::path(pkg_path, "appdir", "cache", "tuning"))) {
-    fs::dir_create(pkg_path, "appdir", "cache", "tuning")
-  }
-  if (!fs::dir_exists(fs::path(pkg_path, "appdir", "cache", "model_extracts"))) {
-    fs::dir_create(pkg_path, "appdir", "cache", "model_extracts")
-  }
-  
   # cross validation resampling
   dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10)
   
-  # name file
-  nm  <- sanitize_workflow(wfl)
-  
-  # dir for tuning and fitting
-  cache_dir <- fs::path_package("transferice", "appdir", "cache", "tuning")
-  # dir for partials models
-  cache_part <- fs::path_package("transferice", "appdir", "cache", "model_extracts")
-                   
-  cache_file <- try(
-    fs::path_package("transferice", "appdir", "cache", "tuning", nm, 
-                     ext = "rds"), 
-    silent = TRUE
-  )
-  
-  # if the cache does not exist then render from scratch
-  if (inherits(cache_file, "try-error")) {
+  # are there tune parameter then tune them
+  if (nrow(hardhat::extract_parameter_set_dials(wfl)) == 0) {
       
-    if(nrow(hardhat::extract_parameter_set_dials(wfl)) == 0) {
-      
-      out <- tune::fit_resamples(
-        wfl, 
-        resamples = dat_cv, 
-        metrics = yardstick::metric_set(transferice::rmsre), 
-        control = ctrl
-      )
-      
-    } else {
-  
-      # setting model tuning parameters
-      dls <- wfl %>%
-        dials::parameters() %>%
-        # set PCA steps to 9 components total
-        update(num_comp = dials::num_comp(c(1, 9))) 
-      
-      # tuning grid
-      tune_grid <- dials::grid_regular(dls, levels = 9)
-      # tuning
-      out <- tune::tune_grid(
-        wfl,
-        resamples = dat_cv,
-        grid = tune_grid,
-        metrics = yardstick::metric_set(transferice::rmsre), # custom metric
-        control = ctrl
-      )
-    }
+    out <- tune::fit_resamples(
+      wfl, 
+      resamples = dat_cv, 
+      metrics = yardstick::metric_set(transferice::rmsre), 
+      control = ctrl
+    )
     
-    # save tuning or fitted data
-    saveRDS(out, fs::path(cache_dir, nm, ext = "rds"))
+  } else {
+
+    # setting model tuning parameters
+    dls <- wfl %>%
+      dials::parameters() %>%
+      # set PCA steps to 9 components total
+      update(num_comp = dials::num_comp(c(1, 9))) 
     
-    # now also extract the partial models
-    saveRDS(cv_model_extraction(out, wfl), fs::path(cache_part, nm, ext = "rds"))
-  } 
-  # depending whether the data is  already generated this function executes 
-  # fast or slow
-  readRDS(fs::path(cache_dir, nm, ext = "rds"))
+    # tuning grid
+    tune_grid <- dials::grid_regular(dls, levels = 9)
+    # tuning
+    out <- tune::tune_grid(
+      wfl,
+      resamples = dat_cv,
+      grid = tune_grid,
+      metrics = yardstick::metric_set(transferice::rmsre), # custom metric
+      control = ctrl
+    )
+  }
+    
 }
 
 transferice_finalize <- function(split, wfl, dial = NULL) {
@@ -172,6 +135,7 @@ transferice_finalize <- function(split, wfl, dial = NULL) {
 
 # print model metric
 print_metric <- function(dat, metric, sig = 1) {
+  
   x <- dat[dat[[".metric"]] == metric,".estimate", drop  = TRUE]
   mts <- c(rsq = "$r^{2}$", rmse = "RMSE", rmsre = "RMSRE")
   spr <- paste0(mts[metric], " = %0.",sig, "f")
@@ -188,7 +152,7 @@ transform_predictor <- function(rcp, trans) {
   )
 }
 
-# remove near zero varianve before normalizing
+# remove near zero variance before normalizing
 step_nz_normalize <- function(rcp) {
   recipes::step_nzv(rcp, recipes::all_predictors()) |> 
     recipes::step_normalize(recipes::all_predictors())
@@ -214,4 +178,3 @@ default_message <- function() {
     onInitialize = I('function() { this.setValue(null); }')
   )
 }
-

@@ -15,11 +15,10 @@ ggpartial(obj, ...)
   pred = NULL,
   tune = NULL,
   out,
-  type = "regression",
+  type = "xy",
   base_map = NULL,
   return_type = "plot",
-  height = NULL,
-  width = NULL
+  id
 )
 
 \method{ggpartial}{tune_results}(
@@ -28,13 +27,11 @@ ggpartial(obj, ...)
   pred = NULL,
   tune = NULL,
   out,
-  type = "regression",
+  type = "xy",
   base_map = NULL,
   plot_type = "dynamic",
-  mc_cores = 4,
-  renderer = "mkv",
-  height = NULL,
-  width = NULL
+  id,
+  mc_cores = 2
 )
 
 \method{ggpartial}{last_fit}(
@@ -43,10 +40,9 @@ ggpartial(obj, ...)
   pred = NULL,
   tune = NULL,
   out,
-  type = "regression",
+  type = "xy",
   base_map = NULL,
-  height = NULL,
-  width = NULL
+  id
 )
 }
 \arguments{

@@ -17,8 +17,9 @@ explo_ui <- function(id) {
         width = 3,
         wellPanel(        
           h3("Site selection"),
-          selectInput(NS(id, "area"), "Region", choices = geo),
-          selectInput(NS(id, "temp"), "Averaging", choices = temp[1])
+          selectInput(NS(id, "area"), "Region", choices = area),
+          selectInput(NS(id, "temp"), "Averaging", choices = temp),
+          selectInput(NS(id, "group"), "Taxa", choices = "dinocyst")
         )
       ),
       
@@ -27,7 +28,7 @@ explo_ui <- function(id) {
         width = 6, 
         selectInput(
           NS(id, "parm"), 
-          h3("Parameter selection"), 
+          "Parameter selection",
           choices = abbreviate_vars(parms)
         ),
         tabsetPanel(
@@ -35,11 +36,17 @@ explo_ui <- function(id) {
           tabPanel("worldmap", plotOutput(NS(id, "wmap"))),
           tabPanel(
             "site comparison", 
-            fixedRow(
-              selectInput(NS(id, "x"), "x-axis", choices = paste0("PC", 1:10)), 
-              selectInput(NS(id, "y"), "y-axis", choices = paste0("PC", 1:10))
-            ), 
-            plotOutput(NS(id, "pcr"))
+            div(plotOutput(NS(id, "pcr")), style = "text-align: center;"),
+            fluidRow(
+              column(
+                width = 4,
+                selectInput(NS(id, "x"), "x-axis", choices = paste0("PC", 1:10))
+              ),
+              column(
+                width = 4,
+                selectInput(NS(id, "y"), "y-axis", choices = paste0("PC", 1:10))
+              )
+            )
           )
         ),
       ),
@@ -47,9 +54,18 @@ explo_ui <- function(id) {
       column(
         width = 3,
         wellPanel(
-          selectInput(NS(id, "taxa"), h3("Taxon selection"), choices = species_naming(pool)),
-          plotOutput(NS(id, "spc")),
-          imageOutput(NS(id, "exm"))
+          tabsetPanel(
+            id = NS(id, "results"),
+            header = tagList(tags$br(), uiOutput(NS(id, "control")), tags$br()),
+            tabPanel(
+              "abundance",
+              div(plotOutput(NS(id, "spc")), style = "text-align: center;")
+              ),
+            tabPanel(
+              "appearance",
+              imageOutput(NS(id, "exm"))
+            )
+          )
         )
       )
     )
@@ -62,11 +78,7 @@ explo_server <- function(id) {
 
   moduleServer(id, function(input, output, session) {
 
-    # area defined extent of latitude
-    limit <- reactive({
-      if (input$area != "original") 45
-    })
-    
+    # location metadata
     locs <- reactive({
       # connection and query
       locs <- DBI::dbGetQuery(
@@ -77,80 +89,88 @@ explo_server <- function(id) {
         )
       # filter latitudes for area selection
       lat_ft <- rep(TRUE, nrow(locs))
-      if (input$area == "3031") lat_ft <- locs$latitude <= -limit()
-      if (input$area == "3995") lat_ft <- locs$latitude >=  limit()
+      if (input$area == "3031") lat_ft <- locs$latitude <= 0
+      if (input$area == "3995") lat_ft <- locs$latitude >= 0
       locs[lat_ft, , drop = FALSE]
     })
     
+    # get all environmental data from NOAA for the specific averaging period
     environ_dat <- reactive({
-      oceanexplorer::get_NOAA(
-        parms[abbreviate_vars(parms) == input$parm], 
-        1, 
-        "annual"
-      )
+      purrr::map(
+        parms, 
+        ~oceanexplorer::get_NOAA(.x, 1, names(temp)[temp == input$temp])
+        ) |> 
+        purrr::set_names(abbreviate_vars(parms))
     })
     
+    # get unique locations as longitude/latitude dataframe
     coords <- reactive({
-      locs()[, !names(locs()) %in%  c("hole_id", "site", "sample_id"), drop = FALSE]
+      dplyr::distinct(locs(), .data$longitude, .data$latitude)
     })
     
     output$wmap <- renderPlot({
       # coordinates of sample locations
       pts <- sf::st_as_sf(coords(), coords =  c("longitude", "latitude"), crs = 4326)
-      # plot on world map
-      base_map <- oceanexplorer::filter_NOAA(environ_dat(), dept = 30)
+      # select NOAA parameter of interest for plotting
+      NOAA <- environ_dat()[[input$parm]]
       # add sample locations
       oceanexplorer::plot_NOAA(
-        NOAA = base_map, 
+        NOAA = NOAA, 
+        depth = 30,
         points = pts, 
-        epsg = input$area, 
-        limit = limit()
+        epsg = input$area
       ) 
     })
-  
-    # get environmental variable from sample location
+
+    # get environmental variable from sample locations
     environ_pts <- reactive({
       # cast location as list before extraction
-      pts <- setNames(as.list(coords()), nm = c("lon", "lat"))
-      pts <- oceanexplorer::filter_NOAA(environ_dat(), depth = 30, coord = pts)
-      # drop geometry as we will use it for ...
-      parm <- sf::st_drop_geometry(pts)
-      dplyr::bind_cols(locs(), parm)
+      pts <- purrr::set_names(as.list(coords()), nm = c("lon", "lat"))
+      # extract and cast in data.frame format
+      NOAA <- extract_NOAA(environ_dat(), pts)
+      # bind with location metadata
+      dplyr::left_join(locs(), NOAA, by = c("longitude", "latitude"))
     })
 
     # proportional taxon data
     taxon_prop <- reactive({
+      # calculate proportions of taxa dataset (and turn to wide format)
       taxon_prop <- calc_taxon_prop(
         "neptune_sample_taxa", 
         "neptune_sample", 
         pool
-        )
-      # filter to available stations (linked to region selection)
-      dplyr::filter(taxon_prop, .data$hole_id %in% locs()$hole_id)
+      )
+      # filter to available samples (linked to region selection above)
+      dplyr::filter(taxon_prop, .data$sample_id %in% locs()$sample_id)
     })
 
     # plot taxon
     output$spc <- renderPlot({
-      taxon_plot(
-        taxon_prop(),
-        input$taxa,
-        "sample_id"
-      )
-    })
+      # needs to be rendered first
+      req(input$taxa) 
+      # then plot
+      taxon_plot(taxon_prop(), input$taxa, "sample_id")
+    },
+    width = 250,
+    height = 250
+    )
 
-    
     # reduce dimensions
     output$pcr <- renderPlot({
+      
+      # selected variable
       selected_var <- paste(
         input$parm, # variable
-        temp[temp == input$temp], # temporal averaging
+        input$temp, # temporal averaging
         sep = "_"
-        )
-      # rescale (logit from recipes)
+      )
+      
+      # re-scale (logit from recipes)
       taxon_prep <- recipes::recipe(taxon_prop()) |>
         recipes::step_logit(-c(sample_id, hole_id), offset = 0.025) |>
         recipes::prep() |>
         recipes::bake(new_data = NULL)
+
       # perform a pcr
       reduce_dims(
         taxon_prep,
@@ -161,21 +181,61 @@ explo_server <- function(id) {
         component_x = input$x,
         component_y = input$y
       )
+    },
+    width = 400,
+    height = 400
+    )
+    
+    # render controller based on tuning results
+    output$control <- renderUI({
+      
+      # require
+      req(taxon_prop(), cancelOutput = TRUE)
+      
+      # filter zero columns
+      where <- tidyselect::vars_select_helpers$where
+      tx <- dplyr::select(
+        taxon_prop(), 
+        where(~sum(.x) > 0),
+        -c(.data$sample_id, .data$hole_id)
+      ) 
+      
+      # ids of available taxa
+      ids <- colnames(tx)
+ 
+      selectInput(
+        NS(id, "taxa"), 
+        "Taxa selection",
+        choices =  species_naming(pool, ids)
+      )
+    })
+    
+    # combine taxon and environmental data, and export (later this should become a reactive for export)
+    observe({
+      
+      # combine
+      out <- dplyr::right_join(environ_pts(), taxon_prop(), by = c("sample_id", "hole_id"))
+
+      # unique name
+      id <- paste(
+        input$group, 
+        names(temp)[temp == input$temp], 
+        names(area)[area == input$area], 
+        sep = "_"
+      )
+      nm <- file_namer("rds", "raw", id, trans = "prop")
+      
+      # export
+      pt_pkg <- fs::path_package("transferice", "appdir", "cache")
+      saveRDS(out, fs::path(pt_pkg, nm, ext = "rds"))
     })
   })
 }
 
-# parameters
-abbreviate_vars <- function(x, type = "parms") {
-  x <- abbreviate(x, 1, strict = TRUE)
-  x[names(x) == "density"] <- "I" # density is different
-  x[names(x) == "silicate"] <- "i" # salinity is different
-  x
-}
 
 # averaging
 temp <- c("annual", month.name, "winter", "spring", "summer", "autumn")
 temp <- abbreviate(temp, 2)
 
 # geographic window
-geo <- c("global" = "original", "southern" = "3031", "northern" = "3995")
+area <- c("global" = "original", "southern" = "3031", "northern" = "3995")

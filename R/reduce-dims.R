@@ -22,7 +22,7 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
   eigenvectors <- dplyr::bind_cols(
     dplyr::select(props, any_of(id)),
     eigenvectors 
-    )
+  )
  
   # join with environmental data
   eigenvectors <- dplyr::left_join(eigenvectors, parm, by = id) 
@@ -30,6 +30,9 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
   # proportion variance explained 
   eig1 <- eigenvalues[1] ^ 2 / sum(eigenvalues ^ 2) * 100
   eig2 <- eigenvalues[2] ^ 2 / sum(eigenvalues ^ 2) * 100
+  
+  # format variable
+  fvar <- oceanexplorer::env_parm_labeller(var)
   
   # plot
   if (component_x != component_y) {
@@ -42,13 +45,14 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
        )
       ) +
       ggplot2::geom_point(alpha = 0.3) +
-      ggplot2::scale_color_viridis_c(env_parm_labeller(var)) +
+      ggplot2::scale_color_viridis_c(fvar) +
       ggplot2::geom_hline(yintercept = 0, lty = 2) +
       ggplot2::geom_vline(xintercept = 0, lty = 2) +
       ggplot2::labs(
         x = paste0(names(eig1), " ", round(eig1, 1), "%"), 
-        y = paste0(names(eig2), " ", round(eig2, 1), "%")
-        )
+        y = paste0(names(eig2), " ", round(eig2, 1), "%") 
+      ) +
+      transferice_theme() 
   } else {
     ggplot2::ggplot(
       data = tidyr::drop_na(eigenvectors, any_of(var)), 
@@ -62,7 +66,8 @@ reduce_dims <- function(props, parm, var, id, loc, component_x = "PC1",
         alpha = 0.3, 
         position = "identity"
       ) +
-      ggplot2::scale_fill_viridis_d(env_parm_labeller(var)) +
-      ggplot2::labs(x = paste0(names(eig1), " ", round(eig1, 1), "%"))
+      ggplot2::scale_fill_viridis_d(fvar) +
+      ggplot2::labs(x = paste0(names(eig1), " ", round(eig1, 1), "%")) +
+      transferice_theme() 
   }
 }

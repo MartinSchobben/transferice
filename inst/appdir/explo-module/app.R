@@ -1,15 +1,12 @@
-# get db
-pool <- get_pool() 
-
 ui <- fluidPage(
-  theme = bslib::bs_theme(bootswatch = "slate"),
+  theme = bslib::bs_theme(bootswatch = "spacelab"),
   explo_ui("explo")
 )
 
 server <- function(input, output, session) {
  
-  thematic::thematic_shiny()
-  ggplot2::theme_set(ggplot2::theme_minimal())
+  thematic::thematic_shiny(bg = "transparent", fg = "black")
+  
   explo_server("explo")
 }
 

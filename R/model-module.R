@@ -104,15 +104,15 @@ model_ui <- function(id) {
             id = ns("specs"),
             tabPanel(
               "engineering",
-              div(plotOutput(ns("eng")), style="text-align: center;")
+              div(plotOutput(ns("eng")), style = "text-align: center;")
             ),
             tabPanel(
               "training",
-              div(uiOutput(ns("part")), style="text-align: center;")
+              div(uiOutput(ns("part")), style = "text-align: center;")
             ),
             tabPanel(
               "validation",
-              div(plotOutput(ns("final")), style="text-align: center;")
+              div(plotOutput(ns("final")), style = "text-align: center;")
             ),
             header = tagList(
               tags$br(),
@@ -169,7 +169,7 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id) {
+model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is based on query use R6 in future
   moduleServer(id, function(input, output, session) {
     
 #-------------------------------------------------------------------------------
@@ -187,8 +187,8 @@ model_server <- function(id) {
     
     # selected parameter
     pm <- reactive({
-      rlang::sym(paste(input$parm, temp[temp == "an"], sep = "_"))
-      })
+      paste(input$parm, temp[temp == "an"], sep = "_")
+    })
     
     ## all parameters
     pms <- reactive({
@@ -353,7 +353,8 @@ model_server <- function(id) {
     dat <- reactive({
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
-      dinodat
+      nm <- file_namer("rds", "raw", data_id, "count", "prop")
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds"))
     })
     
     # re-sample
@@ -387,9 +388,15 @@ model_server <- function(id) {
       waiter <- waiter::Waiter$new()
       waiter$show()
       on.exit(waiter$hide())
+      
+      # name for caching
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      nm <- file_namer("rds", "training", data_id, trans = wfl_nm)
+      
       # tuning
       set.seed(2)
-      transferice_tuning(splt(), wfl())
+      transferice_tuning(splt(), wfl()) |> 
+        app_caching("rds", nm) # caching
     })
     
     # finalize model (with or without tuning)
@@ -401,37 +408,53 @@ model_server <- function(id) {
 # generate figures
 #-------------------------------------------------------------------------------
 
-    # feature engineering and training
+    # feature engineering, training and validation viz
     observe({
 
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
         dat <- splt()
+        type <- "png" # output type of file
       } else if (input$specs == "training") {
-        # waiter
-        # waiter <- waiter::Waiter$new()
-        # waiter$show()
-        # on.exit(waiter$hide())
         dat <- tun()
+        type <- "mkv" # output type of file
       } else if (input$specs == "validation") {
         dat <- final()
+        type <- "png" # output type of file
       }
-      # fitted data requires a species name variable selection
-      # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
       
-      # create plot or animation (save in `reactiveValues`)
+      # fitted data requires a species name variable selection
+      if (isTruthy(input$dims))  {
+        req(input$comp) 
+        x <- input$comp
+      # tuned data requires a dimension variable selection
+      } else {
+        req(input$peek)
+        x <- input$peek
+      }
+      
+      # file metadata
+      if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
+      wfl_label <- sanitize_workflow(wfl())
+      file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
+                              viz = viz, y = pm(), x = x)
+      height <- file$height
+      if (isTruthy(input$toggle)) width <- file$width else width <- file$height
+      
+      # # create plot or animation (save in `reactiveValues`)
       file$path <- ggpartial(
         obj = dat,
         workflow = wfl(),
         pred = input$peek,
         tune = input$comp,
-        out = !! pm(),
-        type = if (isTruthy(input$toggle))  "spatial" else "regression",
+        out = pm(),
+        type = viz,
         base_map = base(),
-        height = file$height,
-        width = file$width
-      )
+        id = data_id
+      ) |>
+        # caching of file
+        app_caching(type, file_name, width, height)
+
     })
 
     # cross plots
@@ -446,6 +469,8 @@ model_server <- function(id) {
     },
     deleteFile = FALSE
     )
+    
+    observe(message(glue::glue("{file$path}")))
     # CV animations
     output$part  <- renderUI({
       req(file$path)
@@ -458,6 +483,7 @@ model_server <- function(id) {
         loop = TRUE
       )
     })
+    
     # final model image
     output$final <- renderImage({
       req(file$path)
@@ -477,7 +503,7 @@ model_server <- function(id) {
         selectInput(
           NS(id, "peek"), 
           "Taxa selection",
-          choices =  species_naming(dinodat, parms = parms, "an")
+          choices =  species_naming(pool) 
         )
       } else if (input$dims == "PCA") {
         sliderInput(
@@ -494,54 +520,54 @@ model_server <- function(id) {
 # side panel    
 #-------------------------------------------------------------------------------    
 
-    # side panel (sub) model metrics
-    output$results <- renderText({
-      if (input$specs == "engineering") {
-        "Model setup"
-      } else if (input$specs == "training") {
-        "Model optimization"
-      } else if (input$specs == "validation") {
-        "Model performance"
-      }
-    })
-
-    # show locations selection controls when data loaded
-    observe({
-      updateTabsetPanel(session, "results", selected = input$specs)
-    })
-
-    # model features as text in side panel
-    output$setup <- renderUI({
-      # fitted data requires a species name variable selection
-      # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
-      print_model(
-        obj = splt(),
-        workflow = wfl(),
-        pred = input$peek,
-        tune = input$comp,
-        out = !! pm()
-      )
-    })
-    
-    # plot the submodel metrics as a boxplot
-    output$submetrics <- renderUI({
-      # fitted data requires a species name variable selection
-      # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
-      print_model(
-        obj = tun(), 
-        workflow = wfl(), 
-        pred = input$peek, 
-        tune = input$comp, 
-        out = !!pm(),
-        width = 250,
-        height = 250
-      )
-    })
-    
-    # final model metric as text in side panel
-    output$finmetrics <- renderUI({print_model(final())})
+    # # side panel (sub) model metrics
+    # output$results <- renderText({
+    #   if (input$specs == "engineering") {
+    #     "Model setup"
+    #   } else if (input$specs == "training") {
+    #     "Model optimization"
+    #   } else if (input$specs == "validation") {
+    #     "Model performance"
+    #   }
+    # })
+    # 
+    # # show locations selection controls when data loaded
+    # observe({
+    #   updateTabsetPanel(session, "results", selected = input$specs)
+    # })
+    # 
+    # # model features as text in side panel
+    # output$setup <- renderUI({
+    #   # fitted data requires a species name variable selection
+    #   # tuned data requires a dimension variable selection
+    #   if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+    #   print_model(
+    #     obj = splt(),
+    #     workflow = wfl(),
+    #     pred = input$peek,
+    #     tune = input$comp,
+    #     out = pm()
+    #   )
+    # })
+    # 
+    # # plot the submodel metrics as a boxplot
+    # output$submetrics <- renderUI({
+    #   # fitted data requires a species name variable selection
+    #   # tuned data requires a dimension variable selection
+    #   if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+    #   print_model(
+    #     obj = tun(), 
+    #     workflow = wfl(), 
+    #     pred = input$peek, 
+    #     tune = input$comp, 
+    #     out = pm(),
+    #     width = 250,
+    #     height = 250
+    #   )
+    # })
+    # 
+    # # final model metric as text in side panel
+    # output$finmetrics <- renderUI({print_model(final())})
   })
 }
 
