@@ -87,6 +87,8 @@ explo_server <- function(id) {
           FROM neptune_hole_summary l 
             LEFT JOIN neptune_sample s ON l.hole_id = s.hole_id"
         )
+      # remove redundant information (site name)
+      locs <- dplyr::select(locs, -site)
       # filter latitudes for area selection
       lat_ft <- rep(TRUE, nrow(locs))
       if (input$area == "3031") lat_ft <- locs$latitude <= 0
@@ -210,11 +212,16 @@ explo_server <- function(id) {
       )
     })
     
-    # combine taxon and environmental data, and export (later this should become a reactive for export)
+    # combine taxon and environmental data, and export (later this should 
+    # become a reactive for export)
     observe({
       
       # combine
-      out <- dplyr::right_join(environ_pts(), taxon_prop(), by = c("sample_id", "hole_id"))
+      out <- dplyr::right_join(
+        environ_pts(), 
+        taxon_prop(), 
+        by = c("sample_id", "hole_id")
+      )
 
       # unique name
       id <- paste(

@@ -6,7 +6,7 @@ formula_parser <- function(
     dat, 
     parms, 
     averaging = "an",
-    remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth"),
+    # remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth"),
     type = "ordinary"
   ) {
   
@@ -17,13 +17,13 @@ formula_parser <- function(
     # parameter names
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = "+")
     
-    # taxa names
-    rm <- c(paste0(transferice:::abbreviate_vars(parms), averaging), remove)
-    dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), 
-                  collapse = "+")
-    
+    # # taxa names
+    # rm <- c(paste0(transferice:::abbreviate_vars(parms), averaging), remove)
+    # dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), 
+    #               collapse = "+")
+    # 
     # formula
-    as.formula(paste0(pms, "~", dns))
+    as.formula(paste0(pms, "~ ."))
     
   } else if (type == "tidymodels") {
     
@@ -31,7 +31,7 @@ formula_parser <- function(
     pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = ",")
 
     # need to rewrite formula as parsnip does not accept multivariate model
-    as.formula(paste0("cbind(", pms, ")~."))
+    as.formula(paste0("cbind(", pms, ")~ ."))
     
   }
 }
@@ -41,14 +41,18 @@ transferice_recipe <- function(
     trans = NULL, 
     dim_reduction = NULL, 
     tunable = TRUE, 
-    averaging = "an", 
-    remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth")
+    averaging  = "an"#, 
+    # remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth")
   ) {
 
   # formula
-  fml <- formula_parser(dat, parms, averaging, remove)
+  fml <- formula_parser(dat, parms, averaging)
   # recipe
-  rcp <- recipes::recipe(fml, data = dat)
+  rcp <- recipes::recipe(fml, data = dat) |> 
+    # standard steps
+    recipes::update_role(.data$longitude, .data$latitude, new_role = "spatial") |>
+    recipes::update_role(.data$hole_id, new_role = "group id") |>
+    recipes::update_role(.data$sample_id, new_role = "id")
   
   # transforming 
   if (isTruthy(trans)) {
@@ -171,6 +175,7 @@ step_log_center <- function(rcp) {
 
 # control resample of model fit
 ctrl <- tune::control_resamples(extract = function(x) tune::extract_fit_parsnip(x))
+
 
 default_message <- function() {
   list(

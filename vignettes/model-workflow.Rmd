@@ -20,7 +20,7 @@ library(transferice)
 
 For predictive modelling it is necessary to obtain a model that can generalize patterns in the data. The fundamental process to achieve this is data splitting, By leaving out a portion of the data during model construction, this provides an empirical way to evaluate a model's performance outside the scope of the original data.
 
-To achieve this this package use the tidymodels metapackage, where seperate package deal with re-sampling, model fitting and evaluation.
+To achieve this this package use the tidymodels metapackage, where separate packages deal with re-sampling, model fitting and evaluation.
 
 # Data
 
@@ -30,9 +30,9 @@ To exemplify the package goal of constructing transfer function for paleo-enviro
 str(dinodat[1:10,1:15])
 ```
 
-The basic model constitutes thus a multivariate multiple regression model of matrix with $n$ dinocyst species and $m$ sites ($X$) and a matrix of $n$ oceanographic parameters and again $m$ sites ($Y$).
+The basic model constitutes thus a multivariate multiple regression model of matrix with $n$ dinocyst species and $m$ sites ($\mathbb{X}$) and a matrix of $n$ oceanographic parameters and again $m$ sites ($\mathbb{Y}$).
 
-$$Y = \beta_0 + \beta_1X$$
+$$\mathbb{Y}= \mathbb{X} \mathbf{B} + \mathbf{E} $$
 
 
 # Splitting data with re-sampling
