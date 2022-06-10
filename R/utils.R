@@ -1,66 +1,84 @@
 # some dinocyst count datasets have absolute counts, so it is converted to
 # relative proportions for each sample
-calc_taxon_prop <- function(count, meta, con) {
+calc_taxon_prop <- function(
+    con, 
+    count = "neptune_sample_taxa", 
+    meta =  "neptune_sample", 
+    taxon = "neptune_taxonomy"
+  ) {
   # obtain counts and make wide format
   DBI::dbGetQuery(
     con ,
     paste0(
       "SELECT 
         c.sample_id, 
-        c.taxon_id,
-        hole_id,
         taxon_abundance / SUM(taxon_abundance) 
-          OVER (PARTITION BY c.sample_id) AS taxon_prop 
-            FROM ", count, " AS c
-              LEFT JOIN ", meta, " AS s ON c.sample_id = s.sample_id")
-    ) |>
-  tidyr::pivot_wider(
-    names_from = taxon_id,
-    values_from = taxon_prop,
-    values_fill = numeric(1)
-  )
+          OVER (PARTITION BY c.sample_id) AS taxon_prop, 
+            c.taxon_id,
+            hole_id,
+            genus ||  
+              COALESCE(' ' || species, '') || 
+                COALESCE(' ' || subspecies, '')  AS name
+                  FROM ", count, " AS c
+                    LEFT JOIN ", meta, " AS s ON c.sample_id = s.sample_id
+                      LEFT JOIN ", taxon, " AS t 
+                        ON c.taxon_id = t.taxon_id"
+    )
+  ) |> 
+    # drop taxon id
+    dplyr::select(- .data$taxon_id) |> 
+    dplyr::mutate(name = stringr::str_trim(name)) |>  
+    tidyr::pivot_wider(
+      names_from = name,
+      values_from = taxon_prop,
+      values_fill = numeric(1)
+    ) 
   
 }
 
 # species names for selection
-# dat: dataset
-# name: species name
-# con: database connection
-# taxon: name of datatable
-species_naming <- function(
-    con,
-    ids = NULL,
-    taxa_name = NULL, 
-    taxon = "neptune_taxonomy",
-    averaging = "an", 
-    remove = c("hole_id", "longitude", "latitude", "sample_id")
-) {
+# workflow object
+# id: id to search
+species_naming <- function(workflow, id) {
   
-  # get taxon list
-  nms <- DBI::dbGetQuery(
-    con ,
-    paste0("SELECT taxon_id, genus ||  
-              COALESCE(' ' || species, '') || 
-              COALESCE(' ' || subspecies, '')  AS name
-                FROM ", taxon)
-  ) 
-    
-  # named vector
-  nms <- setNames(
-    # ids
-    nms$taxon_id,
-    # sanitize names
-    nm = vapply(nms$name, sanitize_taxa, character(1))
-  )
+  hardhat::extract_preprocessor(workflow) |> 
+    recipes::tidy(2) |> 
+    dplyr::filter(.data$terms == !!id) |> 
+    dplyr::pull(.data$value) |> 
+    stringr::str_replace_all("\"", "")
+  
+}
 
-  # provide names if data is supplied
-  if (!is.null(ids))  return(nms[nms %in% ids]) 
-    
-  # provide id if name is supplied
-  if (!is.null(taxa_name)) return(nms[names(nms) %in% taxa_name]) 
+reverse_normalize <- function(data, recipe, predicted = FALSE) {
   
-  nms
+  stp_norm <- recipes::tidy(recipe, 1)
+  if (isTRUE(predicted)) {
+    stp_norm <- dplyr::mutate(stp_norm, terms = paste0(".pred_", terms))
+  }
   
+  pms <- unique(stp_norm$terms)
+  
+  if (isTRUE(predicted)) pms <-paste0(".pred_", pms) 
+  
+  dplyr::mutate(
+    data, 
+    dplyr::across(
+      dplyr::any_of(pms),
+      ~reverse_normalize_(
+        .x, 
+        stp_norm[stp_norm$terms == dplyr::cur_column(), , drop = FALSE]
+      )
+    ))
+}
+
+reverse_normalize_ <- function(parm, stat) {
+  
+  mean <- dplyr::filter(stat, .data$statistic == "mean") |> 
+    dplyr::pull(.data$value)
+  sd <- dplyr::filter(stat, .data$statistic == "sd") |> 
+    dplyr::pull(.data$value)
+  
+  (parm * sd) + mean 
 }
 
 # parameters

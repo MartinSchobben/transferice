@@ -110,33 +110,32 @@ test_that("partial regressions can be plotted without tuning", {
   # inspect feature engineering
   vdiffr::expect_doppelganger(
     "feature engineering",
-    ggpartial(splt, wfl, pred = "Pentapharsodinium dalei", out = t_an)
+    ggpartial(splt, wfl, pred = "taxa_1", out = 't_an')
   )
 
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(fitted_cv, wfl, pred = "Pentapharsodinium dalei", out = t_an, 
-              plot_type = "static")
+    ggpartial(fitted_cv, wfl, pred = "taxa_1", out = 't_an', id = "dinocyst_annual_global")
   )
   
   # create error by supplying tune
   expect_error(
-    ggpartial(fitted_cv, wfl, tune = 1, pred = NULL, out = t_an, plot_type = "static"),
+    ggpartial(fitted_cv, wfl, tune = 1, pred = NULL, out = "t_an", 
+              plot_type = "static"),
     "The model has NOT been tuned and therefore `pred` needs to be supplied!"
   )
 
   vdiffr::expect_doppelganger(
     "partial spatial",
-    ggpartial(fitted_cv, wfl, pred = "Pentapharsodinium dalei", out = n_an, 
+    ggpartial(fitted_cv, wfl, pred = "taxa_3", out = "n_an", 
               type = "spatial", base_map = base, plot_type = "static")
   )
   
   # r squared plot
-  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", out = t_an)
+  ggpartial(final, wfl, pred = "taxa_2", out = "t_an")
 
-  ggpartial(final, wfl, pred = "Pentapharsodinium dalei", 
-            out = t_an, type = "spatial", base_map = base)
+  ggpartial(final, wfl, pred = "taxa_3", out = "t_an", type = "spatial", base_map = base)
 })
 
 test_that("predictor arguments are supplied (not tuned)", {

@@ -41,18 +41,24 @@ transferice_recipe <- function(
     trans = NULL, 
     dim_reduction = NULL, 
     tunable = TRUE, 
-    averaging  = "an"#, 
-    # remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth")
+    averaging  = "an"
   ) {
 
-  # formula
-  fml <- formula_parser(dat, parms, averaging)
+  # variables
+  ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
+  pms <- paste(abbreviate_vars(parms), averaging, sep = "_") # parameters
+  txa <- colnames(dat)[!colnames(dat) %in% c(ids, pms)] # taxa
+  
+  # roles
+  rls <- c("id", "group", "spatial", "spatial", 
+           rep("outcome", length(pms)), rep("predictor", length(txa)))
+  
   # recipe
-  rcp <- recipes::recipe(fml, data = dat) |> 
-    # standard steps
-    recipes::update_role(.data$longitude, .data$latitude, new_role = "spatial") |>
-    recipes::update_role(.data$hole_id, new_role = "group id") |>
-    recipes::update_role(.data$sample_id, new_role = "id")
+  rcp <- recipes::recipe(x = dat, vars = c(ids, pms, txa), roles = rls) |> 
+    # scale all outcomes
+    recipes::step_normalize(recipes::all_outcomes()) |> 
+    # rename taxa
+    recipes::step_rename(recipes::all_predictors(), !!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) 
   
   # transforming 
   if (isTruthy(trans)) {
@@ -174,7 +180,11 @@ step_log_center <- function(rcp) {
 }
 
 # control resample of model fit
-ctrl <- tune::control_resamples(extract = function(x) tune::extract_fit_parsnip(x))
+ctrl <- tune::control_resamples(
+  extract = function(x) {
+    list(fit = tune::extract_fit_parsnip(x), recipe = tune::extract_recipe(x))
+  }
+)
 
 
 default_message <- function() {

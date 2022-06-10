@@ -4,7 +4,10 @@
 dbpath <- fs::path_package(package = "transferice", "extdata", 
                            "transferice.sqlite")
 con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
-dino_prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con) 
+
+# calculate proportional dino counts
+dino_prop <- calc_taxon_prop(con) 
+
 # environment
 locs <- DBI::dbGetQuery(
   con, 

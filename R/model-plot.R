@@ -58,24 +58,24 @@ ggpartial.mc_split <- function(
   }
   
   # split object for training recipe
-  cast <- recipes::prep(recipe, training = rsample::training(obj)) |> 
+  prep <- recipes::prep(recipe, training = rsample::training(obj))  
     # apply to training data
-    recipes::bake(new_data = NULL)
+  cast <-  recipes::bake(prep, new_data = NULL) |> 
+    # reverse normalization
+    reverse_normalize(prep)
   
   if (return_type == "cast") return(cast)
 
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  
+  x_lbl <- species_naming(workflow, as_name(x))
   
   # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
   
   if (all(!isTruthy(pred), !isTruthy(recipe_specs))) {
-    x_lbl <- paste0("transform(", as_name(x), ")")
-  } else {
-    x_lbl <- as_name(x)
-  }
+    x_lbl <- paste0("transform(", x_lbl, ")")
+  } 
     
   if (type == "spatial") {
     
@@ -145,12 +145,19 @@ ggpartial.tune_results <- function(
   ) {
   
   # memoised partials function
-  nm <- file_namer("rds", "training", id, "partial_models", 
-                   trans = sanitize_workflow(workflow))
-  partials <- cv_model_extraction(obj) |> 
-    app_caching("rds", nm) # caching
+  nm_fit <- file_namer("rds", "training", id, "partial_fit", 
+                       trans = sanitize_workflow(workflow))
+  nm_rcp <- file_namer("rds", "training", id, "partial_recipe", 
+                       trans = sanitize_workflow(workflow))
   
-
+  # partial fits
+  partials_fit <- cv_extraction(obj) |> 
+    app_caching("rds", nm_fit) # caching
+  
+  # partial trained recipes
+  partials_rcp <- cv_extraction(obj, "recipe") |> 
+    app_caching("rds", nm_rcp) # caching
+  
   # predictor variable
   x <- pred_check(obj, pred, tune)
 
@@ -164,12 +171,12 @@ ggpartial.tune_results <- function(
   }
   
   # check if tuned then subset num_comp (filter only what's needed)
-  trytune <- try(dplyr::filter(partials, .data$num_comp == tune), silent = TRUE)
-  if (!inherits(trytune, "try-error")) partials <- trytune
+  trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
+  if (!inherits(trytune, "try-error")) partials_fit <- trytune
 
   # predicted values
   output <- dplyr::transmute(
-    partials, 
+    partials_fit, 
     id = .data$id,
     .output = purrr::map2(
       .data$.extracts, 
@@ -179,14 +186,15 @@ ggpartial.tune_results <- function(
   ) 
   
   # plot y-axis label for the predicted values
-  lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
+  y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
+  x_lbl <- species_naming(workflow, as_name(x))
   
   # determine type of statistics and build plot base
   if (type == "spatial") {
     
     # original data
     origin <- dplyr::transmute(
-      partials, 
+      partials_fit, 
       origin = purrr::map(splits, tibble::as_tibble)
     ) 
 
@@ -210,7 +218,7 @@ ggpartial.tune_results <- function(
   } else if (type == "xy") {
   
     # prepare data
-    part <- tidyr::unnest(partials,  cols = .data$.input) |> 
+    part <- tidyr::unnest(partials_fit,  cols = .data$.input) |> 
       dplyr::select(-c(.data$splits, .data$.extracts))
     output <- tidyr::unnest(output, cols = .data$.output) |> 
       dplyr::select(-.data$id)
@@ -237,7 +245,11 @@ ggpartial.tune_results <- function(
     } else  if (type == "xy") {
       
       p <- p + gganimate::transition_states(.data$id) + 
-        ggplot2::labs(title = 'Partial regression ({closest_state})', y = lbl)
+        ggplot2::labs(
+          title = 'Partial regression ({closest_state})', 
+          y = y_lbl,
+          x = x_lbl
+        )
 
     }
   }
@@ -295,12 +307,13 @@ ggpartial.last_fit <- function(
     names(z) = out # rename
     
     # label
-    lbl <- oceanexplorer::env_parm_labeller(out, prefix = "Delta")
-      
+    y_lbl <- oceanexplorer::env_parm_labeller(out, prefix = "Delta")
+    x_lbl <- species_naming(workflow, as_name(x))
+    
     # plot 
     p <- oceanexplorer::plot_NOAA(z) +
-      ggplot2::scale_fill_gradient2(lbl) +
-      ggplot2::ggtitle(ttl_spat)
+      ggplot2::scale_fill_gradient2(y_lbl) +
+      ggplot2::labs(title = ttl_spat, x = x_lbl)
       
   } else if (type == "xy") {
       

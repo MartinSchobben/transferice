@@ -21,8 +21,29 @@ test_that("partial model extract works", {
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
   
-  # parts
+  # extracts
+  ext <- cv_extraction(tuned_cv)
+  
+  # parts fit
   expect_snapshot(
-    cv_model_extraction(tuned_cv)
+    ext
+  )
+  
+  # partial fits
+  out <- dplyr::transmute(
+    ext, 
+    id = .data$id,
+    .output = purrr::map2(
+      .data$.extracts, 
+      .data$.input, 
+      ~calc_partials(.x, .y, taxa_1, t_an)
+    )
+  ) 
+  expect_snapshot(out)
+  
+  
+  # parts trained receipe
+  expect_snapshot(
+    cv_extraction(tuned_cv, "recipe")
   )
 })

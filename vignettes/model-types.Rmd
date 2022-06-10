@@ -25,60 +25,49 @@ library(transferice)
 
 For a starters we use again all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
 
-```{r data}
-library(tidyr)
-
-# unique locations
-udinodat <- dplyr::distinct(dinodat, hole_id, .keep_all = TRUE)
-
-# make var acceptable for nlme
-nms <- colnames(udinodat)
-new_nms <- paste0("taxa", nms[grepl("^[[:digit:]]*$", nms)])
-nms[grepl("^[[:digit:]]*$", nms)] <- new_nms
-colnames(udinodat) <- nms
-
-```
-
-
 ```{r lme}
 fm <- as.formula(
   paste("t_an + p_an + n_an + i_an + o_an + s_an + I_an ~ .")
-  )
-rand <- as.formula(paste("~", paste0(new_nms, collapse = " + "), "| parameter"))
-
+)
 ```
-
 
 ```{r pcs}
 
 # recipe
-rcp <- recipes::recipe(fm, data = udinodat) |> 
-  recipes::update_role(longitude, latitude, new_role = "spatial variable") |> 
-  recipes::step_logit(recipes::all_predictors(), offset = 0.025) |> 
+rcp <- recipes::recipe(fm, data = dinodat) |> 
+  # update roles
+  recipes::update_role(longitude, latitude, new_role = "spatial") |> 
+  recipes::update_role(.data$hole_id, new_role = "group id") |>
+  recipes::update_role(.data$sample_id, new_role = "id") |> 
+  # rename taxa
+  recipes::step_rename_at(recipes::all_predictors(), fn = ~ paste0("taxa_", .)) |> 
+  # rescale outcomes
   recipes::step_nzv(recipes::all_outcomes()) |> 
   recipes::step_normalize(recipes::all_outcomes()) |> 
-  recipes::step_pca(recipes::all_predictors(), num_comp = 9)
+  # rescale predictor
+  recipes::step_logit(recipes::all_predictors(), offset = 0.025) |> 
+  # reduce dimensions
+  recipes::step_pca(recipes::all_predictors(), num_comp = 9) |> 
+  # pivot for multilevel
+  step_pivot(recipes::all_outcomes(), options = list(names_to = "parameter"))
   
 
-cast <- recipes::prep(rcp, training = udinodat) |> 
+cast <- recipes::prep(rcp, training = dinodat) |> 
   # apply to training data
   recipes::bake(new_data = NULL)
+```
 
-cast <- pivot_longer(cast, ends_with("_an"), names_to = "parameter")
 
+```{r}
 
-cast  <- dplyr::mutate(
-  cast, 
-  parameter = udinodat$parameter,
-  x = udinodat$longitude,
-  y = udinodat$latitude
-)
+library(nlme)
 
-md1 <- nlme::lme(value~PC1 + PC2 + PC3 + PC4, data = cast, 
-          random = ~PC1 + PC2 + PC3 + PC4|parameter,
-          correlation = corSpatial(form = ~x + y|parameter, type = "g" ),
-          control = nlme::lmeControl(msMaxIter = 1000, msMaxEval = 1000))
+lme_spec <- parsnip::linear_reg() |> 
+  parsnip::set_engine("lme", ~PC1 + PC2|parameter)
 
+lme_fit <- lme_spec |> 
+ parsnip::fit(value~PC1 + PC2, data = cast)
+  
 ```
 
 
@@ -90,10 +79,39 @@ ggplot(cast, aes(value, PC2, color = parameter)) + geom_point()
 # spatial variance
 
 ```{r spat}
+# recipe
+rcp <- recipes::recipe(fm, data = dinodat) |> 
+  # update roles
+  recipes::update_role(longitude, latitude, new_role = "spatial") |> 
+  recipes::update_role(.data$hole_id, new_role = "group id") |>
+  recipes::update_role(.data$sample_id, new_role = "id") |> 
+  # rename taxa
+  recipes::step_rename_at(recipes::all_predictors(), fn = ~ paste0("taxa_", .)) |> 
+  # remove zero distance
+  step_zerogeodist(lon = longitude, lat = latitude) |> 
+  # rescale outcomes
+  # recipes::step_nzv(recipes::all_outcomes()) |> 
+  recipes::step_normalize(recipes::all_outcomes()) |> 
+  # rescale predictor
+  recipes::step_logit(recipes::all_predictors(), offset = 0.025) |> 
+  # reduce dimensions
+  recipes::step_pca(recipes::all_predictors(), num_comp = 9) |> 
+  # pivot for multilevel
+  step_pivot(recipes::all_outcomes(), options = list(names_to = "parameter"))
+    
 
-library(nlme)
+cast <- recipes::prep(rcp, training = dinodat) |> 
+  # apply to training data
+  recipes::bake(new_data = NULL)
 
-var_md1 <- Variogram(md1, from =  x + y|parameter, robust = TRUE, resType = "pearson")
+lme_spec <- parsnip::linear_reg() |> 
+  parsnip::set_engine(
+    "lme", 
+    random = ~PC1 + PC2|parameter, 
+    correlation = corSpatial(form = ~longitude + latitude|parameter, type = "g" )
+  )
 
-plot(var_md1, smooth = TRUE)
+lme_fit <- lme_spec |> 
+ parsnip::fit(value~PC1 + PC2, data = cast)
+
 ```
