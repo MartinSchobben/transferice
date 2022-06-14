@@ -44,7 +44,7 @@ test_that("partial regressions can be plotted with tuning", {
   
   # what happens if `pred` is supplied with a tuned recipe?
   expect_error(
-    ggpartial(splt, wfl, pred = "33", out = t_an),
+    ggpartial(splt, wfl, pred = "33", out = "t_an"),
     "The model has been tuned and therefore `tune` needs to be supplied!"
   )
   
@@ -116,7 +116,8 @@ test_that("partial regressions can be plotted without tuning", {
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(fitted_cv, wfl, pred = "taxa_1", out = 't_an', id = "dinocyst_annual_global")
+    ggpartial(fitted_cv, wfl, pred = "taxa_1", out = 't_an', 
+              id = "dinocyst_annual_global")
   )
   
   # create error by supplying tune

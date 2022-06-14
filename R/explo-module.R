@@ -137,11 +137,7 @@ explo_server <- function(id) {
     # proportional taxon data
     taxon_prop <- reactive({
       # calculate proportions of taxa dataset (and turn to wide format)
-      taxon_prop <- calc_taxon_prop(
-        "neptune_sample_taxa", 
-        "neptune_sample", 
-        pool
-      )
+      taxon_prop <- calc_taxon_prop(pool)
       # filter to available samples (linked to region selection above)
       dplyr::filter(taxon_prop, .data$sample_id %in% locs()$sample_id)
     })
@@ -201,14 +197,11 @@ explo_server <- function(id) {
         where(~sum(.x) > 0),
         -c(.data$sample_id, .data$hole_id)
       ) 
-      
-      # ids of available taxa
-      ids <- colnames(tx)
- 
+
       selectInput(
         NS(id, "taxa"), 
         "Taxa selection",
-        choices =  species_naming(pool, ids)
+        choices =  colnames(tx)
       )
     })
     

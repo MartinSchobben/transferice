@@ -38,12 +38,17 @@ calc_taxon_prop <- function(
 
 # species names for selection
 # workflow object
-# id: id to search
-species_naming <- function(workflow, id) {
+# id: id to search (if NULL all names are give)
+species_naming <- function(workflow, id = NULL) {
   
-  hardhat::extract_preprocessor(workflow) |> 
-    recipes::tidy(2) |> 
-    dplyr::filter(.data$terms == !!id) |> 
+  nms <- hardhat::extract_preprocessor(workflow) |> 
+    recipes::tidy(2) 
+  
+  if (is.null(id)) {
+    id <- paste0("taxa_", 1:nrow(nms))
+  }
+  
+  dplyr::filter(nms, .data$terms %in% !!id) |> 
     dplyr::pull(.data$value) |> 
     stringr::str_replace_all("\"", "")
   
@@ -58,7 +63,7 @@ reverse_normalize <- function(data, recipe, predicted = FALSE) {
   
   pms <- unique(stp_norm$terms)
   
-  if (isTRUE(predicted)) pms <-paste0(".pred_", pms) 
+  # if (isTRUE(predicted)) pms <-paste0(".pred_", pms) 
   
   dplyr::mutate(
     data, 

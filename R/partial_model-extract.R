@@ -10,7 +10,31 @@ cv_extraction <- function(tuned_cv = NULL, type = "fit") {
   
 }
 
-calc_partials <- function(model, newdat, x, y) {
+calc_partials <- function(partials, x, y) {
+  
+  x <- rlang::enquo(x)
+  y <- rlang::enquo(y)
+  
+  # partial predictions
+  dplyr::transmute(
+    partials, 
+    id = .data$id,
+    .input = purrr::map2(
+      .data$.extracts,
+      .data$.input,
+      # reverse normalization
+      function(x, y) reverse_normalize(y, x$recipe)
+    ),
+    .output = purrr::map2(
+      .data$.extracts, 
+      .data$.input, 
+      ~calc_partials_(.x, .y, !!x, !!y)
+    )
+  ) 
+ 
+}
+
+calc_partials_ <- function(model, newdat, x, y) {
   
   x <- rlang::enquo(x)
   y <- rlang::enquo(y)
@@ -20,6 +44,7 @@ calc_partials <- function(model, newdat, x, y) {
     dplyr::across(-c(.data[[!!x]], .data[[!!y]]), mean, na.rm = TRUE)
   ) |> 
     predict(object = model$fit) |> 
+    # reverse outcome normalization
     reverse_normalize(model$recipe, TRUE)
   
 }
@@ -32,9 +57,7 @@ bind_partials <- function(fold, type = "fit") {
     dplyr::bind_cols(
       fold[[type]]$fit$model[[1]], 
       fold[[type]]$fit$model[,-1, drop = FALSE]
-    ) |>
-      # reverese outocme normailization
-      reverse_normalize(fold[["recipe"]])
+    ) 
     
   } else if (type == "recipe") {
     

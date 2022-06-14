@@ -46,4 +46,8 @@ test_that("partial model extract works", {
   expect_snapshot(
     cv_extraction(tuned_cv, "recipe")
   )
+  
+  # partials calcs
+  calc_partials(ext, taxa_1, t_an)
+  
 })

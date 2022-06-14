@@ -470,7 +470,6 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     deleteFile = FALSE
     )
     
-    observe(message(glue::glue("{file$path}")))
     # CV animations
     output$part  <- renderUI({
       req(file$path)
@@ -497,13 +496,23 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     deleteFile = FALSE
     )
     
+
+                               
     # render controller based on tuning results
     output$control <- renderUI({
+      
+      # species names
+      spec_nms <- species_naming(wfl()) 
+      spec_nms <- rlang::set_names(
+        paste0("taxa_", seq_along(spec_nms)), 
+        spec_nms
+      )
+      
       if (!isTruthy(input$dims)) {
         selectInput(
           NS(id, "peek"), 
           "Taxa selection",
-          choices =  species_naming(pool) 
+          choices = spec_nms
         )
       } else if (input$dims == "PCA") {
         sliderInput(

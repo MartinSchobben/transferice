@@ -175,15 +175,7 @@ ggpartial.tune_results <- function(
   if (!inherits(trytune, "try-error")) partials_fit <- trytune
 
   # predicted values
-  output <- dplyr::transmute(
-    partials_fit, 
-    id = .data$id,
-    .output = purrr::map2(
-      .data$.extracts, 
-      .data$.input, 
-      ~calc_partials(.x, .y, !!x, !!y)
-    )
-  ) 
+  output <- calc_partials(partials_fit, !!x, !!y)
   
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
@@ -218,11 +210,7 @@ ggpartial.tune_results <- function(
   } else if (type == "xy") {
   
     # prepare data
-    part <- tidyr::unnest(partials_fit,  cols = .data$.input) |> 
-      dplyr::select(-c(.data$splits, .data$.extracts))
-    output <- tidyr::unnest(output, cols = .data$.output) |> 
-      dplyr::select(-.data$id)
-    comb <- dplyr::bind_cols(part, output)
+    comb <- tidyr::unnest(output, cols = c(.data$.input, .data$.output))
 
     # plot
     p <- ggbase(comb, x, y, id = TRUE)  + 

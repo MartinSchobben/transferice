@@ -58,7 +58,7 @@ transferice_recipe <- function(
     # scale all outcomes
     recipes::step_normalize(recipes::all_outcomes()) |> 
     # rename taxa
-    recipes::step_rename(recipes::all_predictors(), !!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) 
+    recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) 
   
   # transforming 
   if (isTruthy(trans)) {

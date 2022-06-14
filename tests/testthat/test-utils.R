@@ -21,28 +21,20 @@ test_that("rows add to 1", {
 
 test_that("species can be named",{
   
-  # connection
-  dbpath <- fs::path_package(package = "transferice", "extdata", 
-                             "transferice.sqlite")
-  con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
+  # recipes
+  rcp <- transferice_recipe(dinodat)
+
+    # model
+  mdl <- parsnip::linear_reg() |>
+    parsnip::set_engine('lm') |>
+    parsnip::set_mode('regression')
   
-  # get taxa names
-  expect_snapshot(
-    species_naming(con)
-  )
+  # workflow
+  wfl <- workflows::workflow() |>
+    workflows::add_recipe(rcp) |>
+    workflows::add_model(mdl)
   
-  # get taxa names with id selection
-  expect_snapshot(
-    species_naming(con, c(83, 91))
-  )
-  
-  # get ids
-  tx <- c("Trinovantedinium pallidifulvum", "Polarella glacialis")
-  expect_snapshot(
-    species_naming(con, parms, taxa_name = tx)
-  )
-  
-  on.exit(DBI::dbDisconnect(con))
+  species_naming(wfl)
 })
 
 test_that("workflow with no steps can be sanitized", {
