@@ -6,9 +6,6 @@
 \usage{
 get_pool()
 }
-\value{
-
-}
 \description{
 Title
 }

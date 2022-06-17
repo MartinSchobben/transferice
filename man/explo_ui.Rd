@@ -12,9 +12,6 @@ explo_server(id)
 \arguments{
 \item{id}{Namespace id.}
 }
-\value{
-
-}
 \description{
 Shiny exploration module
 }

@@ -36,8 +36,7 @@ model_ui <- function(id) {
               selectInput(
                 NS(id, "model"), 
                 "Model type", 
-                choices = c("linear model (OLS)", 
-                            "linear model (GLS)")
+                choices = c("linear model (OLS)" = "ols",  "linear model (GLS)" = "gls")
               ),
             ),
             tabPanel("bayesian"),
@@ -409,7 +408,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
 #-------------------------------------------------------------------------------
 
     # feature engineering, training and validation viz
-    observe({
+    file_info <- reactive({
 
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
@@ -441,19 +440,26 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       height <- file$height
       if (isTruthy(input$toggle)) width <- file$width else width <- file$height
       
-      # # create plot or animation (save in `reactiveValues`)
+      # output
+      list(dat = dat, viz = viz, type = type, file_name = file_name, width = width, height = height) 
+    })
+    
+    # create plot or animation (save in `reactiveValues`)
+    observe({
+
       file$path <- ggpartial(
-        obj = dat,
+        obj = file_info()$dat,
         workflow = wfl(),
         pred = input$peek,
         tune = input$comp,
         out = pm(),
-        type = viz,
+        type = file_info()$viz,
         base_map = base(),
         id = data_id
       ) |>
         # caching of file
-        app_caching(type, file_name, width, height)
+        app_caching(file_info()$type, file_info()$file_name, file_info()$width,
+                    file_info()$height)
 
     })
 
@@ -470,17 +476,19 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     deleteFile = FALSE
     )
     
+    observe(message(glue::glue("{file_info()$file_name}")))
     # CV animations
     output$part  <- renderUI({
-      req(file$path)
-      tags$video(
-        height = file$height, 
-        width = if (isTruthy(input$toggle)) file$width else file$height, 
-        type = "video/mkv", 
-        src = file$path, 
-        autoplay = TRUE,
-        loop = TRUE
-      )
+      if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
+        tags$video(
+          height = file$height, 
+          width = if (isTruthy(input$toggle)) file$width else file$height, 
+          type = "video/mkv", 
+          src = file$path, 
+          autoplay = TRUE,
+          loop = TRUE
+        )
+      }
     })
     
     # final model image
@@ -508,7 +516,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
         spec_nms
       )
       
-      if (!isTruthy(input$dims)) {
+      if (!isTruthy(input$dims) && input$specs != "validation") {
         selectInput(
           NS(id, "peek"), 
           "Taxa selection",
@@ -517,12 +525,13 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       } else if (input$dims == "PCA") {
         sliderInput(
           NS(id, "comp"), 
-          "Principal components", 1, 9, 1, 
+          "Principal components", 
+          min = 1, 
+          max = 4, 
+          value = 1, 
           ticks = FALSE
         )
-      } else if (input$specs == "validation") {
-        NULL
-      }
+      } 
     }) 
     
 #-------------------------------------------------------------------------------

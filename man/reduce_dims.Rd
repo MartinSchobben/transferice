@@ -21,9 +21,6 @@ reduce_dims(
 
 \item{...}{}
 }
-\value{
-
-}
 \description{
 Dimension reduction with PCA
 }

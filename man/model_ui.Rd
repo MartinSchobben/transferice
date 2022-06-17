@@ -9,9 +9,6 @@ model_ui(id)
 \arguments{
 \item{id}{namespace}
 }
-\value{
-
-}
 \description{
 Shiny model module
 }

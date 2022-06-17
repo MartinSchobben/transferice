@@ -18,63 +18,111 @@ knitr::opts_chunk$set(
 library(transferice)
 ```
 
-
-
-
 # Data
 
 For a starters we use again all dinocyst data but exclusively use temperature at a 30 meter water depth as an outcome variable.
 
-```{r lme}
-fm <- as.formula(
-  paste("t_an + p_an + n_an + i_an + o_an + s_an + I_an ~ .")
-)
-```
 
-```{r pcs}
+```{r splits}
+library(recipes)
+library(rsample)
+# splitting
+dinodat_split <- initial_split(dinodat, prop = 0.75)# strata = "parameter") 
+# training
+dinodat_train <- training(dinodat_split)
+# testing
+dinodat_test <- testing(dinodat_split)
+
+# variables
+ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
+pms <- paste(abbreviate_vars(parms), "an", sep = "_") # parameters
+txa <- colnames(dinodat)[!colnames(dinodat) %in% c(ids, pms)] # taxa
+
+# roles
+rls <- c("id", "group", "spatial", "spatial", 
+         rep("outcome", length(pms)), rep("predictor", length(txa)))
 
 # recipe
-rcp <- recipes::recipe(fm, data = dinodat) |> 
-  # update roles
-  recipes::update_role(longitude, latitude, new_role = "spatial") |> 
-  recipes::update_role(.data$hole_id, new_role = "group id") |>
-  recipes::update_role(.data$sample_id, new_role = "id") |> 
+rcp <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
   # rename taxa
-  recipes::step_rename_at(recipes::all_predictors(), fn = ~ paste0("taxa_", .)) |> 
-  # rescale outcomes
-  recipes::step_nzv(recipes::all_outcomes()) |> 
-  recipes::step_normalize(recipes::all_outcomes()) |> 
+  step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) |> 
+  # # rescale outcomes
+  step_normalize(all_outcomes()) |> 
   # rescale predictor
-  recipes::step_logit(recipes::all_predictors(), offset = 0.025) |> 
+  step_logit(all_predictors(), offset = 0.025) |> 
+  # center predictors
+  step_center(all_predictors()) |> 
   # reduce dimensions
-  recipes::step_pca(recipes::all_predictors(), num_comp = 9) |> 
+  step_pca(all_predictors(), num_comp = 4) |> 
   # pivot for multilevel
-  step_pivot(recipes::all_outcomes(), options = list(names_to = "parameter"))
+  step_pivot(all_outcomes(), options = list(names_to = "parameter")) 
   
 
-cast <- recipes::prep(rcp, training = dinodat) |> 
-  # apply to training data
-  recipes::bake(new_data = NULL)
+
 ```
 
 
 ```{r}
-
 library(nlme)
+library(parsnip)
+library(multilevelmod)
 
-lme_spec <- parsnip::linear_reg() |> 
-  parsnip::set_engine("lme", ~PC1 + PC2|parameter)
+
+fixed <- as.formula(paste0("value~", paste0("PC", 1:4, collapse = "+")))
+
+lme_spec <- linear_reg() |> 
+  set_engine(
+    "lme",  
+    random = ~ PC1 + PC2 + PC3 + PC4 | parameter, 
+    # weights = varIdent(form = ~ 1 | parameter),
+    control = lmeControl(opt = 'optim')#,
+    # correlation = corSymm(form = ~ 1 | parameter)
+  )  |> 
+  # usage of the model for regression
+  set_mode('regression')
+
+
+dinodat_prep <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
 
 lme_fit <- lme_spec |> 
- parsnip::fit(value~PC1 + PC2, data = cast)
-  
+ fit(fixed, data = dinodat_prep)
+
 ```
 
 
-```{r plot}
+# Workflow
 
-ggplot(cast, aes(value, PC2, color = parameter)) + geom_point()
+
+```{r workflow}
+library(workflows)
+library(tune)
+library(yardstick)
+
+lme_wfl <- workflow() |> 
+  add_recipe(rcp) |> 
+  add_model(lme_spec, formula = value ~ PC1 + PC2 + PC3 + PC4) #|> 
+  # add_variables(outcomes = value, predictors = c(PC1, PC2, PC3, PC4, parameter))
+
+lme_fit <- last_fit(lme_wfl, dinodat_split, control = control_last_fit(verbose = TRUE))
+
+# multiple cross validation
+dinodat_cv <- vfold_cv(training(cast_split), v = 10)
+
+dinodat_resamp <- fit_resamples(
+  lme_wfl, 
+  resamples = dinodat_cv,  
+  metrics = metric_set(rmse), 
+  control = ctrl
+)
 ```
+
+
+partial plots
+ 
+```{r partial, options}
+ggpartial(dinodat_resamp, lme_wfl, tune = 1, out = "t_an", id = "test", plot_type = "static")
+```
+
 
 # spatial variance
 

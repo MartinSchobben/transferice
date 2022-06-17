@@ -15,9 +15,6 @@ taxon_plot(taxon, var, id, cutoff = 30)
 
 \item{Taxon}{Species abundance dataframe.}
 }
-\value{
-
-}
 \description{
 Taxon ggplot
 }

@@ -3,36 +3,33 @@
 # averaging = averaging period
 # remove = variables not used in regression
 formula_parser <- function(
-    dat, 
-    parms, 
+    y,
+    x, 
     averaging = "an",
-    # remove = c("site", "sample_id", "longitude", "latitude", "hole_id", "depth"),
+    group = "parameter",
     type = "ordinary"
   ) {
   
-  averaging <- paste0("_", averaging)
-
+  x <- paste0(x, collapse = "+")
+  
   if (type ==  "ordinary") {
     
     # parameter names
-    pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = "+")
+    y <- paste0(y, collapse = "+")
     
-    # # taxa names
-    # rm <- c(paste0(transferice:::abbreviate_vars(parms), averaging), remove)
-    # dns <- paste0(paste0("`", names(dat)[!names(dat) %in% rm], "`"), 
-    #               collapse = "+")
-    # 
-    # formula
-    as.formula(paste0(pms, "~ ."))
+    as.formula(paste0(y, "~", paste0x))
     
   } else if (type == "tidymodels") {
     
     # parameter names
-    pms <- paste0(transferice:::abbreviate_vars(parms), averaging, collapse = ",")
+    y <- paste0(y, collapse = ",")
 
     # need to rewrite formula as parsnip does not accept multivariate model
-    as.formula(paste0("cbind(", pms, ")~ ."))
+    as.formula(paste0("cbind(", y, ")~ ", x))
     
+  } else if (type == "random") {
+    
+    as.formula(paste0("~", x, "|" , group))
   }
 }
 
@@ -104,17 +101,17 @@ transferice_tuning <- function(split, wfl) {
     # setting model tuning parameters
     dls <- wfl %>%
       dials::parameters() %>%
-      # set PCA steps to 9 components total
-      update(num_comp = dials::num_comp(c(1, 9))) 
+      # set PCA steps to 4 components total
+      update(num_comp = dials::num_comp(c(1, 4))) 
     
     # tuning grid
-    tune_grid <- dials::grid_regular(dls, levels = 9)
+    tune_grid <- dials::grid_regular(dls, levels = 4)
     # tuning
     out <- tune::tune_grid(
       wfl,
       resamples = dat_cv,
       grid = tune_grid,
-      metrics = yardstick::metric_set(transferice::rmsre), # custom metric
+      metrics = yardstick::metric_set(transferice::rmse), 
       control = ctrl
     )
   }

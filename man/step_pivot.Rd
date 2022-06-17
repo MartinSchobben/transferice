@@ -7,7 +7,7 @@
 step_pivot(
   recipe,
   ...,
-  role = "outcome",
+  role = "predictor",
   trained = FALSE,
   options = list(names_to = "name", values_to = "value"),
   skip = FALSE,

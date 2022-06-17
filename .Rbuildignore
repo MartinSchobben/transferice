@@ -8,3 +8,6 @@
 ^data-raw$
 ^DOCKERFILE$
 ^app\.R$
+^inst/appdir$
+^inst/www$
+^inst/extdata$

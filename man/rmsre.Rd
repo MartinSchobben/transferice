@@ -17,9 +17,6 @@ rmsre_vec(truth, estimate, na_rm = TRUE, ...)
 
 \item{...}{}
 }
-\value{
-
-}
 \description{
 Root mean square relative error
 }

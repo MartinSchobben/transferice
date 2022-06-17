@@ -66,12 +66,6 @@ lm_model <- linear_reg() |>
   # usage of the model for regression
   set_mode('regression')
 
-# set type of model (linear regression)
-stan_model <- linear_reg() |> 
-  # set the engine (bayesian with rstanarm)
-  set_engine('stan_glmer') |> 
-  # usage of the model for regression
-  set_mode('regression')
 ```
 
 # Feature engineering with recipes
@@ -81,14 +75,26 @@ stan_model <- linear_reg() |>
 library(recipes)
 
 # parse formula
-fml <- formula_parser(dinodat, parms)
+# variables
+ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
+pms <- paste(abbreviate_vars(parms), "an", sep = "_") # parameters
+txa <- colnames(dinodat)[!colnames(dinodat) %in% c(ids, pms)] # taxa
+
+# roles
+rls <- c("id", "group", "spatial", "spatial", 
+         rep("outcome", length(pms)), rep("predictor", length(txa)))
 
 # formula for recipes
-dinodat_recipe <- recipe(fml, data = dinodat) |> 
+dinodat_recipe <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
+  # scale all outcomes
+  recipes::step_normalize(recipes::all_outcomes()) |> 
+  # rename taxa
+  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa))))  |> 
   # make dino count log odds
   step_logit(all_predictors(), offset = 0.025) |>  
   # reduce multi-dimensionality
-  step_pca(all_predictors(), options = list(center =  TRUE)) 
+  step_pca(all_predictors(), options = list(center =  TRUE)) |> 
+  step_mutate(env = p_an, role = "outcome")
 ```
 
 Prepare and apply to training set
@@ -112,19 +118,19 @@ dinodat_test_prep <- prep(dinodat_recipe, training = dinodat_train) |>
 
 ```{r fit}
 # need to rewrite formula as parsnip does not accept multivariate model
-fml2 <- formula_parser(dinodat, parms, type = "tidymodels")
-fml2 <- as.formula("t_an + p_an + n_an + i_an + o_an + s_an + I_an ~.")
+#fml <- formula_parser(pms, paste0("PC", 1:5), type = "tidymodels")
+
+fml <-as.formula(paste0("env~", paste0("PC", 1:5, collapse = "+")))
+
 
 # fit (OLS)
 lm_fit <- lm_model %>%   
-  fit(fml2,  data = dinodat_train_prep)
-# fit (stan)
-stan_fit <- stan_model |>    
-  fit(fml2,  data = dinodat_train_prep)
+  fit(fml,  data = dinodat_train_prep)
 ```
 
 
 ```{r predict}
+# predicting
 dinodat_predict_lm <- predict(lm_fit, new_data = dinodat_test_prep)
 
 # bind test
@@ -133,43 +139,23 @@ dinodat_test_prep_lm <- rename_with(
   .cols = ends_with("_an"), 
   .fn = ~paste0(".truth_", .x)
 )
-outcome_lm <- bind_cols(dinodat_test_prep_lm, dinodat_predict_lm)
 
-dinodat_predict_stan <- predict(stan_fit, new_data = dinodat_test_prep)
-
-# bind test
-dinodat_test_prep_stan <- rename_with(
-  dinodat_test_prep, 
-   .cols = ends_with("_an"), 
-  .fn = ~paste0(".truth_", .x)
-)
-outcome_stan <- bind_cols(dinodat_test_prep_stan, dinodat_predict_stan)
+# results
+outcome <- bind_cols(dinodat_test_prep_lm, dinodat_predict_lm)
 ```
 
 # Evaluate model with yardstick
 
-```{r metrics}
-# install.packages("yardstick")
-library(yardstick)
-# metrics
-rmsre(
-  outcome, 
-  truth =  rlang::inject(c(!!! rlang::syms(paste0(".truth_", sl_parms)))), 
-  estimate = rlang::inject(c(!!! rlang::syms(paste0(".pred_", sl_parms))))
-)
-```
 
 visualize fit
 
 ```{r viz}
-# install.packages("ggplot2")
-# install.packages("tune")
 library(ggplot2)
 library(tidyr)
-library(tune)
+
 long_outcome <- pivot_longer(
   outcome,
-  cols = !c(PC1, PC2, PC3, PC4, PC5),
+  cols = !c(sample_id, hole_id, longitude, latitude, PC1, PC2, PC3, PC4, PC5),
   names_to = c(".value", "parameter"),
   names_pattern = "(.*)_(._an)"
 )
@@ -186,59 +172,19 @@ ggplot(long_outcome, aes(x = .truth, y = .pred)) +
   )
 ```
 
-How does this look like in a spatial sense?
-
-```{r spatpat}
-library(sf)
-library(tibble)
-library(gstat)
-# make coordinate sf object
-tot <- add_column(
-  outcome, 
-  longitude = dinodat_test$longitude, 
-  latitude = dinodat_test$latitude
-)
-crds <- st_as_sf(tot, coords = c("longitude", "latitude"), crs =  4326)
-
-# get nicely spread POINT with no duplication within tolerance limit
-d = st_is_within_distance(crds, dist = 2500)
-dupl = unlist(mapply(function(x,y) x[x < y], d, seq_along(d)))
-crds <- crds[-dupl, ]
-
-# variogram (exploration)
-v <- variogram(.pred_t_an ~ .truth_t_an, crds) 
-plot(v)
-# variogram (modelling)
-# mean variance
-mean_var <- yardstick::rmse(tot, .truth_t_an, .pred_t_an)$.estimate 
-vario_model <- fit.variogram(v, vgm(var(tot$.pred_t_an), "Sph", 700, mean_var)) 
-
-plot(v, vario_model)
-
-g <- gstat(formula = .pred_t_an ~ .truth_t_an, data = crds, model = vario_model)
-
-base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
-  oceanexplorer::filter_NOAA(depth = 0) |> 
-  stars::st_warp(crs = 4326) |>  
-  rename(.truth_t_an = "t_an")
-
-z <- predict(g, base)
-
-z = z["var1.pred",,]
-names(z) = "t_an"
-oceanexplorer::plot_NOAA(z, points = crds)
-```
 
 # Compact format with workflows and automated testing
 
 ```{r workflows}
 # install.packages("workflows")
+library(tune)
 library(workflows)
+library(yardstick)
 lm_wfl <- workflow() |> 
   add_recipe(dinodat_recipe) |> 
   add_model(lm_model)
 
-outcome <- last_fit(lm_wfl, split = dinodat_split, metrics = metric_set(rmsre, rmse))
+outcome <- last_fit(lm_wfl, split = dinodat_split, metrics = metric_set(rmse))
 collect_metrics(outcome)
 ```
 
@@ -249,7 +195,12 @@ Now we want to know what actually would be the optimal selection of components f
 ```{r tune}
 # install.packages("dials")
 library(dials)
-dinodat_recipe_tune <- recipe(fml, data = dinodat) |> 
+dinodat_recipe_tune <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
+  # scale all outcomes
+  recipes::step_normalize(recipes::all_outcomes()) |> 
+  # rename taxa
+  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa))))  |> 
+  # center
   step_logit(all_predictors(), offset = 0.025) |> 
   # step_scale(all_outcomes()) |> 
   step_pca(all_predictors(), num_comp = tune(), options = list(center =  TRUE))
@@ -287,9 +238,9 @@ dinodat_tuned <- tune_grid(
   lm_tune_wfl, 
   resamples = dinodat_cv, 
   grid = lm_grid, 
-  metrics = metric_set(rmsre), 
-  control = control_resamples(extract = function(x) extract_fit_parsnip(x))
-  )
+  metrics = metric_set(rmse), 
+  control = ctrl
+)
 ```
 
 get the metrics
@@ -305,8 +256,7 @@ collect_metrics(dinodat_tuned, summarize = FALSE) |>
 # Partial regression plots
 
 ```{r partial}
-mdl_extracts <- cv_model_extraction(dinodat_tuned) 
-ggpartial(mdl_extracts, 1, "t_an", plot_type = "static")
+ggpartial(dinodat_tuned, lm_tune_wfl, tune = 1, out = "t_an", id = "test", plot_type = "static")
 ```
 
 # Finalize
@@ -315,7 +265,7 @@ ggpartial(mdl_extracts, 1, "t_an", plot_type = "static")
 # select best
 lm_final_wfl <- finalize_workflow(
   lm_tune_wfl, 
-  tibble(num_comp = 3)#, .config = "Preprocessor03_Model1")
+  tibble(num_comp = 3)
 )
 final_outcome <- last_fit(
   lm_final_wfl, 
@@ -327,7 +277,7 @@ final_outcome |> collect_metrics()
 
 final_fit <- rename_with(
   collect_predictions(final_outcome), 
-  .cols = any_of(sl_parms), 
+  .cols = any_of(pms), 
   .fn = ~paste0(".truth_", .x)
 )
 

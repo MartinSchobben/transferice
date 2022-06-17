@@ -27,7 +27,7 @@
 step_pivot <- function(
   recipe, 
   ..., 
-  role = "outcome", 
+  role = c("predictor", "outcome"), 
   trained = FALSE,
   options = list(names_to = "name", values_to = "value"), 
   skip = FALSE,
@@ -39,12 +39,23 @@ step_pivot <- function(
     step_pivot_new(
       terms = enquos(...), 
       trained = trained,
-      role = role, 
-      options = options,
+      role = role[1], 
+      options = options$names_to,
       skip = skip,
       id = id
     )
-  )
+  ) |> 
+    recipes::add_step(
+  
+      recipes:::step_mutate_new(
+        trained = trained,
+        role = role[2],
+        inputs = options$values_to,
+        skip = skip,
+        id = rand_id("mutate")
+      )
+
+    )
   
 }
 
@@ -76,6 +87,7 @@ prep.step_pivot <- function(x, training, info = NULL, ...) {
   
   ## Use the constructor function to return the updated object. 
   ## Note that `trained` is now set to TRUE
+
   step_pivot_new(
     terms = terms, 
     trained = TRUE,
@@ -90,5 +102,15 @@ prep.step_pivot <- function(x, training, info = NULL, ...) {
 bake.step_pivot <- function(object, new_data, ...) {
   rlang::inject(
     tidyr::pivot_longer(new_data, cols = dplyr::all_of(object$terms), !!!object$options)
-  )
+  ) 
+}
+#' @importFrom recipes tidy
+#' @export
+tidy.step_pivot <- function(x, ...) {
+    term_names <- sel2char(x$terms)
+    res <-
+      tibble(
+        terms = term_names,
+        id = x$id
+      )
 }
