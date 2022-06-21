@@ -26,29 +26,19 @@ parms <- c("temperature", "phosphate", "nitrate", "silicate", "oxygen",
 usethis::use_data(parms, overwrite = TRUE)
 
 # get NOAA annually averaged data for parameters on a 1 degree grid 
-ls_data <- purrr::map(parms, ~oceanexplorer::get_NOAA(.x, 1, "annual"))
+dt  <- oceanexplorer::get_NOAA("temperature", 1, "annual")
 
 crd <- locs[, !names(locs) %in%  c("hole_id", "site", "sample_id"), drop = FALSE]
 # cast location as list before extraction
 pts <- setNames(as.list(crd), nm = c("lon", "lat"))
 
 # get locations parameters
-ls_parms <- purrr::map(
-  ls_data, 
-  ~oceanexplorer::filter_NOAA(.x, depth = 30,  coord = pts)
-)
+parms <- oceanexplorer::filter_NOAA(dt, depth = 30,  coord = pts) |> 
+  dplyr::select(-.data$depth) |> 
+  sf::st_drop_geometry() 
 
-# make normal tibble
-reduce_sf <- function(parms) {
-  
-  # remove depth
-  purrr::map(parms, ~dplyr::select(.x, -.data$depth)) |> 
-    # drop geometry as we will use it for ...
-    purrr::map(~sf::st_drop_geometry(.x)) |> 
-    dplyr::bind_cols()
-}
-
-environ_dat <- dplyr::bind_cols(locs, reduce_sf(ls_parms)) |> 
+# location informaiton
+environ_dat <- dplyr::bind_cols(locs, parms) |> 
   dplyr::select(-c(.data$site))
 
 # save data

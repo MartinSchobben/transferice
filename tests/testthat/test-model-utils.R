@@ -5,11 +5,7 @@ test_that("transferice workflows and model tuning works", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipes
-  rcp <- transferice_recipe(dinodat)
-  rcp <- transferice_recipe(dinodat, trans = character(0), dim_reduction = character(0))
-  rcp <- transferice_recipe(dinodat, trans = character(1), dim_reduction = character(1))
-  rcp <- transferice_recipe(dinodat, trans = "logit")
-  # rcp <- transferice_recipe(dinodat, trans = "normalize")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
   
   # model
   mdl <- parsnip::linear_reg() |>
@@ -24,5 +20,21 @@ test_that("transferice workflows and model tuning works", {
   # tuning
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
-
+  
+  # recipes
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA", model = "gls")
+  
+  # model
+  gls_spec <- parsnip::linear_reg() |> 
+    parsnip::set_engine(
+      "gls",
+      control = nlme::lmeControl(opt = 'optim')
+    )  |> 
+    # usage of the model for regression
+    parsnip::set_mode('regression')
+  
+  gls_wfl <- workflows::update_model(wfl, gls_spec)
+  gls_wfl <- workflows::update_recipe(wfl, rcp)
+  
+  transferice_tuning(splt, gls_wfl)
 })

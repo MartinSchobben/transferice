@@ -1,7 +1,7 @@
 test_that("partial regressions can be plotted with tuning", {
   
   # partial map projection
-  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
+  base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
     oceanexplorer::filter_NOAA(depth = 0) |> 
     stars::st_warp(crs = 4326) |> 
     stars::st_downsample(n = 5)
@@ -11,7 +11,7 @@ test_that("partial regressions can be plotted with tuning", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipe
-  rcp <- transferice_recipe(dinodat, trans = "logit", dim_reduction = "PCA")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
   
   # model
   mdl <- parsnip::linear_reg() |>
@@ -39,7 +39,7 @@ test_that("partial regressions can be plotted with tuning", {
   # inspect feature engineering (on map)
   vdiffr::expect_doppelganger(
     "feature engineering",
-    ggpartial(splt, wfl, tune = 1, out = "n_an", type = "spatial", base_map = base)
+    ggpartial(splt, wfl, tune = 1, out = "t_an", type = "spatial", base_map = base)
   )
   
   # what happens if `pred` is supplied with a tuned recipe?
@@ -65,12 +65,12 @@ test_that("partial regressions can be plotted with tuning", {
   # final fit
   vdiffr::expect_doppelganger(
     "final fit regression",
-    ggpartial(final, wfl, tune = 1, out = "t_an")
+    ggpartial(final, wfl, out = "t_an")
   )
   
   vdiffr::expect_doppelganger(
     "final fit spatial",
-    ggpartial(final, wfl, tune = 1, out = "n_an", type = "spatial", 
+    ggpartial(final, wfl, out = "t_an", type = "spatial", 
               base_map = base)
   )
 })
@@ -78,7 +78,7 @@ test_that("partial regressions can be plotted with tuning", {
 test_that("partial regressions can be plotted without tuning", {
   
   # partial map projection
-  base <- oceanexplorer::get_NOAA("nitrate", 1, "annual") |> 
+  base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
     oceanexplorer::filter_NOAA(depth = 0) |> 
     stars::st_warp(crs = 4326) |> 
     stars::st_downsample(n = 5)
@@ -88,7 +88,7 @@ test_that("partial regressions can be plotted without tuning", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipe
-  rcp <- transferice_recipe(dinodat, trans = "log")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "log")
   
   # model
   mdl <- parsnip::linear_reg() |>

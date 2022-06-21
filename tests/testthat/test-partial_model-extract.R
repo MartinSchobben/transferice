@@ -5,7 +5,7 @@ test_that("partial model extract works", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipes
-  rcp <- transferice_recipe(dinodat, trans = "logit")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
 
   # model
   mdl <- parsnip::linear_reg() |>
@@ -30,17 +30,9 @@ test_that("partial model extract works", {
   )
   
   # partial fits
-  out <- dplyr::transmute(
-    ext, 
-    id = .data$id,
-    .output = purrr::map2(
-      .data$.extracts, 
-      .data$.input, 
-      ~calc_partials(.x, .y, taxa_1, t_an)
-    )
-  ) 
+  out <- calc_partials(ext, PC1, t_an)
+ 
   expect_snapshot(out)
-  
   
   # parts trained receipe
   expect_snapshot(
@@ -48,6 +40,6 @@ test_that("partial model extract works", {
   )
   
   # partials calcs
-  calc_partials(ext, taxa_1, t_an)
+  calc_partials(ext, PC1, t_an)
   
 })

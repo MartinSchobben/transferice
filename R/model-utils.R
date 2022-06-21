@@ -1,57 +1,75 @@
+role_organizer <- function(
+    dat, 
+    outcome, 
+    group = "hole_id", 
+    temporal = "sample_id", 
+    spatial = c("longitude", "latitude"),
+    aliases = NULL
+  ) {
+  
+  # variables
+  txa <- colnames(dat)[!colnames(dat) %in% c(outcome, group, temporal, spatial)] # taxa
+  # aliases for taxa
+  if (!is.null(aliases)) txa <- paste0(aliases, seq_along(txa))
+  
+  # roles
+  c(
+    temporal =  temporal,
+    group = group,
+    spatial = spatial[1],
+    spatial = spatial[2],
+    outcome = outcome
+  ) |> 
+    append(setNames(txa, rep("predictor", length(txa))))
+  
+}
 # dat = dataset
 # parms = oceanographic parameters
 # averaging = averaging period
 # remove = variables not used in regression
 formula_parser <- function(
-    y,
-    x, 
-    averaging = "an",
-    group = "parameter",
-    type = "ordinary"
+    dat,
+    outcome, 
+    type = "ordinary",
+    aliases = FALSE
   ) {
   
-  x <- paste0(x, collapse = "+")
+  vars <- role_organizer(dat, outcome, aliases = aliases)
+  
+  x <- paste0(vars[names(vars) == "predictor"], collapse = "+")
   
   if (type ==  "ordinary") {
     
-    # parameter names
-    y <- paste0(y, collapse = "+")
-    
-    as.formula(paste0(y, "~", paste0x))
-    
-  } else if (type == "tidymodels") {
-    
-    # parameter names
-    y <- paste0(y, collapse = ",")
 
-    # need to rewrite formula as parsnip does not accept multivariate model
-    as.formula(paste0("cbind(", y, ")~ ", x))
+    as.formula(paste0(outcome, "~", x))
+
     
   } else if (type == "random") {
     
-    as.formula(paste0("~", x, "|" , group))
+    as.formula(paste0("~", x, "|" , vars[names(vars) == "group"]))
+    
+  } else if (type == "correlation") {
+    
+    as.formula(paste0("~", paste(vars[names(vars) == "spatial"], collapse = "+")))
   }
 }
 
 transferice_recipe <- function(
-    dat, 
+    dat,
+    outcome,
     trans = NULL, 
     dim_reduction = NULL, 
-    tunable = TRUE, 
-    averaging  = "an"
+    tunable = TRUE,
+    model = "ols"
   ) {
 
-  # variables
-  ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
-  pms <- paste(abbreviate_vars(parms), averaging, sep = "_") # parameters
-  txa <- colnames(dat)[!colnames(dat) %in% c(ids, pms)] # taxa
-  
-  # roles
-  rls <- c("id", "group", "spatial", "spatial", 
-           rep("outcome", length(pms)), rep("predictor", length(txa)))
+
+  vars <- role_organizer(dat, outcome)
+  # taxa
+  txa <- vars[names(vars) == "predictor"]
   
   # recipe
-  rcp <- recipes::recipe(x = dat, vars = c(ids, pms, txa), roles = rls) |> 
+  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
     # scale all outcomes
     recipes::step_normalize(recipes::all_outcomes()) |> 
     # rename taxa
@@ -78,6 +96,11 @@ transferice_recipe <- function(
     }
   }
   
+  #in case of spatial component with GLS add
+  if (model == "gls") {
+    rcp <- step_zerogeodist(rcp, lon = longitude, lat = latitude, skip = TRUE)
+  }
+  
   rcp
 }
 
@@ -92,7 +115,7 @@ transferice_tuning <- function(split, wfl) {
     out <- tune::fit_resamples(
       wfl, 
       resamples = dat_cv, 
-      metrics = yardstick::metric_set(transferice::rmsre), 
+      metrics = yardstick::metric_set(yardstick::rmse), 
       control = ctrl
     )
     
@@ -101,21 +124,21 @@ transferice_tuning <- function(split, wfl) {
     # setting model tuning parameters
     dls <- wfl %>%
       dials::parameters() %>%
-      # set PCA steps to 4 components total
-      update(num_comp = dials::num_comp(c(1, 4))) 
+      # set PCA steps to 5 components total
+      update(num_comp = dials::num_comp(c(1, 5))) 
     
     # tuning grid
-    tune_grid <- dials::grid_regular(dls, levels = 4)
+    tune_grid <- dials::grid_regular(dls, levels = 5)
     # tuning
     out <- tune::tune_grid(
       wfl,
       resamples = dat_cv,
       grid = tune_grid,
-      metrics = yardstick::metric_set(transferice::rmse), 
+      metrics = yardstick::metric_set(yardstick::rmse), 
       control = ctrl
     )
   }
-    
+  out
 }
 
 transferice_finalize <- function(split, wfl, dial = NULL) {
@@ -130,9 +153,7 @@ transferice_finalize <- function(split, wfl, dial = NULL) {
   
   # metrics to return
   mts <- yardstick::metric_set(
-    transferice::rmsre,
-    yardstick::rmse,
-    yardstick::rsq
+    yardstick::rmse
   )
   
   # fit the final model (does not need to be tuned)
@@ -179,7 +200,7 @@ step_log_center <- function(rcp) {
 # control resample of model fit
 ctrl <- tune::control_resamples(
   extract = function(x) {
-    list(fit = tune::extract_fit_parsnip(x), recipe = tune::extract_recipe(x))
+    list(fit = tune::extract_fit_parsnip(x), recipe = tune::extract_recipe(x), mold  = hardhat::extract_mold(x))
   }
 )
 

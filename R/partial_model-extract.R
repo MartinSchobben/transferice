@@ -1,4 +1,4 @@
-cv_extraction <- function(tuned_cv = NULL, type = "fit") {
+cv_extraction <- function(tuned_cv = NULL, type = "mold") {
   
   # extraction of partials model from CV sub-samples  
   dplyr::select(tuned_cv, .data$splits, .data$id, .data$.extracts) |> 
@@ -49,14 +49,14 @@ calc_partials_ <- function(model, newdat, x, y) {
   
 }
 
-bind_partials <- function(fold, type = "fit") {
+bind_partials <- function(fold, type = "mold") {
   
   # select type of extract
-  if (type == "fit") {
-  
+  if (type == "mold") {
+
     dplyr::bind_cols(
-      fold[[type]]$fit$model[[1]], 
-      fold[[type]]$fit$model[,-1, drop = FALSE]
+      fold[[type]]$predictors,
+      fold[[type]]$outcome
     ) 
     
   } else if (type == "recipe") {

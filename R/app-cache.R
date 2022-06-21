@@ -78,18 +78,18 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
 
 # introduce filenaming convention
 file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocessed", 
-                       viz = NULL, y = NULL, x = NULL) {
+                       viz = NULL, x = NULL) {
   
   stopifnot(prefix %in% c("raw", "engineering", "training", "validation"))
   if (type != "rds") stopifnot(viz %in% c("spatial", "xy"))
-  if (type != "rds") stopifnot(all(!is.null(viz), !is.null(y), !is.null(x)))
+  if (type != "rds") stopifnot(all(!is.null(viz), !is.null(x)))
   
   # core names
   nm <- paste(prefix, taxa, method, trans, sep = "_")
   
   # extend if needed
   if (type != "rds") {
-    paste(nm, viz, y, x, sep = "_")
+    paste(nm, viz, x, sep = "_")
   } else {
     nm
   }

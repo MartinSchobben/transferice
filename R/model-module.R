@@ -41,7 +41,19 @@ model_ui <- function(id) {
             ),
             tabPanel("bayesian"),
             header = tagList(
-              tags$br(),
+              tags$br(),   
+              # taxonomy
+              actionLink(
+                ns("taxohelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
+              selectizeInput(
+                ns("taxo"), 
+                "Taxomomic depth", 
+                choices = c("subspecies", "species", "genera"), 
+                options = default_message()
+              ),
               # variance-stabilizing transformations
               actionLink(
                 ns("scalehelper"), 
@@ -66,6 +78,7 @@ model_ui <- function(id) {
                 choices = c("PCA", "PLS"), 
                 options = default_message()
               ),
+              uiOutput(ns("tune"))
             ),
             footer = tagList(
               tags$br(), 
@@ -117,23 +130,16 @@ model_ui <- function(id) {
               tags$br(),
               fluidRow(
                 column(
-                  width = 4,
-                  selectInput(
-                    ns("parm"), 
-                    "Parameter selection", 
-                    choices = abbreviate_vars(parms)
-                  )
-                  ),
-                column(
                   width = 8,
                   uiOutput(NS(id, "control"))
                 )
               )
             ),
-            footer = shinyWidgets::materialSwitch(
-              ns("toggle"), 
-              "project on map"
-            )
+            footer = 
+              # shinyWidgets::materialSwitch(
+              #   ns("toggle"), 
+              #   "project on map"
+              # )
          )
       ),
 
@@ -168,7 +174,7 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is based on query use R6 in future
+model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is based on query use R6 in future
   moduleServer(id, function(input, output, session) {
     
 #-------------------------------------------------------------------------------
@@ -186,18 +192,16 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     
     # selected parameter
     pm <- reactive({
-      paste(input$parm, temp[temp == "an"], sep = "_")
-    })
-    
-    ## all parameters
-    pms <- reactive({
-      paste(parms, temp[temp == "an"], sep = "_")
+      pm <- strsplit(data_id, "_")[[1]][2]
+      av <- strsplit(data_id, "_")[[1]][3]
+      paste(pm, av, sep = "_")
     })
     
     # base map (for kriging interpolation)
     base <- reactive({
+      browser()
       # parameter
-      pm <- parms[abbreviate_vars(parms) == input$parm]
+      pm <- parms[abbreviate_vars(parms) == strsplit(data_id, "_")[[1]][2]]
       # base map (later on replace this)
       oceanexplorer::get_NOAA(pm, 1, "annual") |>
         oceanexplorer::filter_NOAA(depth = 0) |>
@@ -218,6 +222,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       shinyjs::enable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::enable(selector = '.nav-tabs a[data-value="validation"')
       # model setup
+      shinyjs::disable("taxo")
       shinyjs::disable("scale")
       shinyjs::disable("dims")
       shinyjs::disable("model")
@@ -228,6 +233,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       shinyjs::disable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
       # model setup
+      shinyjs::enable("taxo")
       shinyjs::enable("scale")
       shinyjs::enable("dims")
       shinyjs::enable("model")
@@ -236,7 +242,6 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       updateTabsetPanel(session, "specs", selected = "engineering")
     })
     
-   
     # reset model settings
     observeEvent(input$reset, {
       updateSelectizeInput(
@@ -254,6 +259,22 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
         selected = NULL 
       )
     })
+    
+    # dynamic controllers
+    output$tune <- renderUI({
+      
+      if (isTruthy(input$dims)) {
+        sliderInput(
+          NS(id, "ncomp"), 
+          "Number of components", 
+          min = 1, 
+          max = 4, 
+          value = 1, 
+          ticks = FALSE
+        )
+      }
+    })
+    
 #-------------------------------------------------------------------------------
 # Help text
 #-------------------------------------------------------------------------------
@@ -364,16 +385,50 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
     
     # recipe
     rcp <- reactive({
-      transferice_recipe(dat(), trans = input$scale, dim_reduction = input$dims)
+      transferice_recipe(
+        dat(), 
+        outcome = pm(), 
+        trans = input$scale, 
+        dim_reduction = input$dims,
+        model = input$model
+      )
     }) 
     
     # model
     mdl <- reactive({
-      parsnip::linear_reg() |>
-        parsnip::set_engine('lm') |>
+    
+
+      # linear regression
+      mdl <- parsnip::linear_reg() |>
         parsnip::set_mode('regression')
+      
+      # engine
+      if (input$model == "ols") {
+        
+        mdl <- parsnip::set_engine(mdl, 'lm') 
+        
+      } else if (input$model == "gls") {
+    
+        # correlation structure
+        corr <- formula_parser(prep, "t_an", type = "correlation")
+        
+        mdl <- parsnip::set_engine(
+          mdl,
+          "gls",  
+          control = nlme::lmeControl(opt = 'optim'),
+          correlation = nlme::corSpatial(form = ~corr, type = "g" )
+        )
+        
+      } else if (input$model == "nlme") {
+        
+        # prepped data for formula structure
+        prep <- recipes::prep(rcp(), training = rsample::training(splt())) |> 
+          recipes::bake(new_data = NULL)
+      }
+      mdl
     })
     
+    observe(message(glue::glue("{str(mdl())}")))
     # workflow
     wfl <- reactive({
       workflows::workflow() |>
@@ -436,7 +491,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
       if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
       wfl_label <- sanitize_workflow(wfl())
       file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
-                              viz = viz, y = pm(), x = x)
+                              viz = viz, x = x)
       height <- file$height
       if (isTruthy(input$toggle)) width <- file$width else width <- file$height
       
@@ -454,7 +509,7 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
         tune = input$comp,
         out = pm(),
         type = file_info()$viz,
-        base_map = base(),
+        base_map = NULL, #base(),
         id = data_id
       ) |>
         # caching of file
@@ -523,15 +578,18 @@ model_server <- function(id, data_id = "dinocyst_annual_global") { # data id is 
           choices = spec_nms
         )
       } else if (input$dims == "PCA") {
-        sliderInput(
+        selectInput(
           NS(id, "comp"), 
-          "Principal components", 
-          min = 1, 
-          max = 4, 
-          value = 1, 
-          ticks = FALSE
+          "Principal component", 
+           choices = 1:4
         )
-      } 
+      } else {
+        selectInput(
+          NS(id, "diag"), 
+          "Diagnostic",
+          choices = c("R-squared")
+        )
+      }
     }) 
     
 #-------------------------------------------------------------------------------

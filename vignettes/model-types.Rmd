@@ -34,30 +34,22 @@ dinodat_train <- training(dinodat_split)
 dinodat_test <- testing(dinodat_split)
 
 # variables
-ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
-pms <- paste(abbreviate_vars(parms), "an", sep = "_") # parameters
-txa <- colnames(dinodat)[!colnames(dinodat) %in% c(ids, pms)] # taxa
-
-# roles
-rls <- c("id", "group", "spatial", "spatial", 
-         rep("outcome", length(pms)), rep("predictor", length(txa)))
+vars <- role_organizer(dinodat, "t_an")
+# taxa
+txa <- vars[names(vars) == "predictor"]
 
 # recipe
-rcp <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
+rcp <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
+   # rescale outcomes
+  step_normalize(all_outcomes()) |> 
   # rename taxa
   step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) |> 
-  # # rescale outcomes
-  step_normalize(all_outcomes()) |> 
   # rescale predictor
   step_logit(all_predictors(), offset = 0.025) |> 
   # center predictors
   step_center(all_predictors()) |> 
   # reduce dimensions
-  step_pca(all_predictors(), num_comp = 4) |> 
-  # pivot for multilevel
-  step_pivot(all_outcomes(), options = list(names_to = "parameter")) 
-  
-
+  step_pca(all_predictors(), num_comp = 4) 
 
 ```
 
@@ -67,24 +59,21 @@ library(nlme)
 library(parsnip)
 library(multilevelmod)
 
+# prep data
+dinodat_prep <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
+# fixed form
+fixed <- formula_parser(dinodat_prep, "t_an", aliases = "PC")
 
-fixed <- as.formula(paste0("value~", paste0("PC", 1:4, collapse = "+")))
-
-lme_spec <- linear_reg() |> 
+# model
+gls_spec <- linear_reg() |> 
   set_engine(
-    "lme",  
-    random = ~ PC1 + PC2 + PC3 + PC4 | parameter, 
-    # weights = varIdent(form = ~ 1 | parameter),
-    control = lmeControl(opt = 'optim')#,
-    # correlation = corSymm(form = ~ 1 | parameter)
+    "gls",  
+    control = lmeControl(opt = 'optim')
   )  |> 
   # usage of the model for regression
   set_mode('regression')
 
-
-dinodat_prep <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
-
-lme_fit <- lme_spec |> 
+gls_fit <- gls_spec |> 
  fit(fixed, data = dinodat_prep)
 
 ```
@@ -98,18 +87,17 @@ library(workflows)
 library(tune)
 library(yardstick)
 
-lme_wfl <- workflow() |> 
+gls_wfl <- workflow() |> 
   add_recipe(rcp) |> 
-  add_model(lme_spec, formula = value ~ PC1 + PC2 + PC3 + PC4) #|> 
-  # add_variables(outcomes = value, predictors = c(PC1, PC2, PC3, PC4, parameter))
+  add_model(gls_spec, formula = fixed) 
 
-lme_fit <- last_fit(lme_wfl, dinodat_split, control = control_last_fit(verbose = TRUE))
+gls_fit <- last_fit(gls_wfl, dinodat_split)
 
 # multiple cross validation
-dinodat_cv <- vfold_cv(training(cast_split), v = 10)
+dinodat_cv <- vfold_cv(training(dinodat_split), v = 10)
 
 dinodat_resamp <- fit_resamples(
-  lme_wfl, 
+  gls_wfl, 
   resamples = dinodat_cv,  
   metrics = metric_set(rmse), 
   control = ctrl
@@ -120,46 +108,50 @@ dinodat_resamp <- fit_resamples(
 partial plots
  
 ```{r partial, options}
-ggpartial(dinodat_resamp, lme_wfl, tune = 1, out = "t_an", id = "test", plot_type = "static")
+ggpartial(dinodat_resamp, gls_wfl, pred = "PC1", out = "t_an", id = "test", plot_type = "static")
 ```
 
 
 # spatial variance
 
 ```{r spat}
-# recipe
-rcp <- recipes::recipe(fm, data = dinodat) |> 
-  # update roles
-  recipes::update_role(longitude, latitude, new_role = "spatial") |> 
-  recipes::update_role(.data$hole_id, new_role = "group id") |>
-  recipes::update_role(.data$sample_id, new_role = "id") |> 
-  # rename taxa
-  recipes::step_rename_at(recipes::all_predictors(), fn = ~ paste0("taxa_", .)) |> 
-  # remove zero distance
-  step_zerogeodist(lon = longitude, lat = latitude) |> 
-  # rescale outcomes
-  # recipes::step_nzv(recipes::all_outcomes()) |> 
-  recipes::step_normalize(recipes::all_outcomes()) |> 
-  # rescale predictor
-  recipes::step_logit(recipes::all_predictors(), offset = 0.025) |> 
-  # reduce dimensions
-  recipes::step_pca(recipes::all_predictors(), num_comp = 9) |> 
-  # pivot for multilevel
-  step_pivot(recipes::all_outcomes(), options = list(names_to = "parameter"))
-    
+library(dplyr)
+# complex execution take smaller sample
+dinodat_prep_sm <- slice_sample(dinodat_prep, 100)
 
-cast <- recipes::prep(rcp, training = dinodat) |> 
-  # apply to training data
-  recipes::bake(new_data = NULL)
+# update recipe
+rcp <- rcp |> 
+  step_zerogeodist(lon = longitude, lat = latitude)
 
+# prep data
+dinodat_prep_sm <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
+# correlation structure
+corr <- formula_parser(dinodat_prep_sm, "t_an", aliases = "PC", type = "correlation")
+
+# model with spatial correlation
+gls_xy_spec <- linear_reg() |> 
+  set_engine(
+    "gls",  
+    control = lmeControl(opt = 'optim'),
+    correlation = corSpatial(form = ~corr, type = "g" )
+  )  |> 
+  # usage of the model for regression
+  set_mode('regression')
+
+gls_xy_fit <- gls_xy_spec |> 
+ fit(fixed, data = dinodat_prep_sm)
+```
+
+
+# Mixed effect
+
+```{r mix}
+# random formula
+rand <- formula_parser(dinodat_prep, "t_an", aliases = "PC", type = "random")
 lme_spec <- parsnip::linear_reg() |> 
   parsnip::set_engine(
     "lme", 
     random = ~PC1 + PC2|parameter, 
     correlation = corSpatial(form = ~longitude + latitude|parameter, type = "g" )
   )
-
-lme_fit <- lme_spec |> 
- parsnip::fit(value~PC1 + PC2, data = cast)
-
 ```

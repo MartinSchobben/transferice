@@ -18,6 +18,8 @@ explo_ui <- function(id) {
         wellPanel(        
           h3("Site selection"),
           selectInput(NS(id, "area"), "Region", choices = area),
+          selectInput(NS(id, "parm"), "Parameter", choices = abbreviate_vars(parms)),
+          sliderInput(NS(id, "depth"), "Waterdepth", min = 0, max = 3500, value = 0),
           selectInput(NS(id, "temp"), "Averaging", choices = temp),
           selectInput(NS(id, "group"), "Taxa", choices = "dinocyst")
         )
@@ -26,11 +28,6 @@ explo_ui <- function(id) {
       # show a plot of the selected sites 
       column(
         width = 6, 
-        selectInput(
-          NS(id, "parm"), 
-          "Parameter selection",
-          choices = abbreviate_vars(parms)
-        ),
         tabsetPanel(
           id ="explore",
           tabPanel("worldmap", plotOutput(NS(id, "wmap"))),
@@ -40,11 +37,11 @@ explo_ui <- function(id) {
             fluidRow(
               column(
                 width = 4,
-                selectInput(NS(id, "x"), "x-axis", choices = paste0("PC", 1:10))
+                selectInput(NS(id, "x"), "x-axis", choices = paste0("PC", 1:5))
               ),
               column(
                 width = 4,
-                selectInput(NS(id, "y"), "y-axis", choices = paste0("PC", 1:10))
+                selectInput(NS(id, "y"), "y-axis", choices = paste0("PC", 1:5))
               )
             )
           )
@@ -98,26 +95,25 @@ explo_server <- function(id) {
     
     # get all environmental data from NOAA for the specific averaging period
     environ_dat <- reactive({
-      purrr::map(
-        parms, 
-        ~oceanexplorer::get_NOAA(.x, 1, names(temp)[temp == input$temp])
-        ) |> 
-        purrr::set_names(abbreviate_vars(parms))
+      # parameter
+      pm <- parms[abbreviate_vars(parms) == input$parm]
+      # averaging period
+      av <- names(temp)[temp == input$temp]
+      # get the oceanographic data
+      oceanexplorer::get_NOAA(pm, 1, av)
     })
     
     # get unique locations as longitude/latitude dataframe
     coords <- reactive({
-      dplyr::distinct(locs(), .data$longitude, .data$latitude)
+      dplyr::select(locs(), .data$longitude, .data$latitude)
     })
     
     output$wmap <- renderPlot({
       # coordinates of sample locations
       pts <- sf::st_as_sf(coords(), coords =  c("longitude", "latitude"), crs = 4326)
-      # select NOAA parameter of interest for plotting
-      NOAA <- environ_dat()[[input$parm]]
       # add sample locations
       oceanexplorer::plot_NOAA(
-        NOAA = NOAA, 
+        NOAA = environ_dat(), 
         depth = 30,
         points = pts, 
         epsg = input$area
@@ -129,9 +125,13 @@ explo_server <- function(id) {
       # cast location as list before extraction
       pts <- purrr::set_names(as.list(coords()), nm = c("lon", "lat"))
       # extract and cast in data.frame format
-      NOAA <- extract_NOAA(environ_dat(), pts)
+      NOAA <- oceanexplorer::filter_NOAA(environ_dat(), input$depth, pts) |> 
+        dplyr::select(-.data$depth) |> 
+        # drop geometry as we will use it for ...
+        sf::st_drop_geometry() 
+      
       # bind with location metadata
-      dplyr::left_join(locs(), NOAA, by = c("longitude", "latitude"))
+      dplyr::bind_cols(locs(), NOAA)
     })
 
     # proportional taxon data
@@ -210,16 +210,18 @@ explo_server <- function(id) {
     observe({
       
       # combine
-      out <- dplyr::right_join(
+      out <- dplyr::left_join(
         environ_pts(), 
         taxon_prop(), 
         by = c("sample_id", "hole_id")
-      )
+      ) |> 
+        tidyr::drop_na()
 
       # unique name
       id <- paste(
-        input$group, 
-        names(temp)[temp == input$temp], 
+        input$group,
+        input$parm,
+        input$temp, 
         names(area)[area == input$area], 
         sep = "_"
       )

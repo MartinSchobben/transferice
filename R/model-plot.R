@@ -48,6 +48,10 @@ ggpartial.mc_split <- function(
   # outcome variable
   y <- out
   
+  # plot y-axis label for the predicted values
+  y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
+  x_lbl <- species_naming(workflow, as_name(x))
+  
   # fallback for no supplied tune with a tuned recipe
   dls <- hardhat::extract_parameter_set_dials(recipe)
   if (nrow(dls) > 0) {
@@ -55,6 +59,7 @@ ggpartial.mc_split <- function(
     name_dial <- dls$name # name of dial
     # replace tuning parameter with fixed parameter based on `tune`
     purrr::pluck(recipe, "steps", depth_dial, name_dial) <- tune 
+    x_lbl <- as_name(x)
   }
   
   # split object for training recipe
@@ -66,10 +71,6 @@ ggpartial.mc_split <- function(
   
   if (return_type == "cast") return(cast)
 
-  # plot y-axis label for the predicted values
-  y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  x_lbl <- species_naming(workflow, as_name(x))
-  
   # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
   
@@ -147,16 +148,16 @@ ggpartial.tune_results <- function(
   # memoised partials function
   nm_fit <- file_namer("rds", "training", id, "partial_fit", 
                        trans = sanitize_workflow(workflow))
-  nm_rcp <- file_namer("rds", "training", id, "partial_recipe", 
-                       trans = sanitize_workflow(workflow))
-  
+  # nm_rcp <- file_namer("rds", "training", id, "partial_recipe", 
+  #                      trans = sanitize_workflow(workflow))
+
   # partial fits
   partials_fit <- cv_extraction(obj) |> 
     app_caching("rds", nm_fit) # caching
   
   # partial trained recipes
-  partials_rcp <- cv_extraction(obj, "recipe") |> 
-    app_caching("rds", nm_rcp) # caching
+  # partials_rcp <- cv_extraction(obj, "recipe") |> 
+  #   app_caching("rds", nm_rcp) # caching
   
   # predictor variable
   x <- pred_check(obj, pred, tune)
@@ -216,7 +217,7 @@ ggpartial.tune_results <- function(
     p <- ggbase(comb, x, y, id = TRUE)  + 
       ggplot2::geom_line(
         mapping = ggplot2::aes(
-          y = .data[[!!rlang::sym(paste0(".pred_",  y))]]
+          y = .data[[".pred"]]
           ),
         linetype = 2,
         color = "blue"
@@ -260,9 +261,7 @@ ggpartial.last_fit <- function(
     id
 ) {
   
-  # predictor variable
-  x <- pred_check(obj, pred, tune)
-  
+
   # extract averaging
   averaging <- gsub("^(.)*_", "", out)
 
@@ -305,31 +304,9 @@ ggpartial.last_fit <- function(
       
   } else if (type == "xy") {
       
-    # rename original true values
-    obj <- dplyr::rename_with(
-      preds, 
-      .cols = dplyr::any_of(pms), 
-      .fn = ~paste0(".truth_", .x)
-    )
-    
-    # pivot to long format
-    long_obj <-tidyr::pivot_longer(
-      obj,
-      cols = dplyr::ends_with(paste0("_", averaging)),
-      names_to = c(".value", "parameter"),
-      names_pattern = paste0("(.*)_(._", averaging ,")")
-    )
-   
-    # check if param exists
-    chk <- out %in% unique(long_obj$parameter)
-    if (!chk) stop("Selected parameter does not exist in data.", 
-                   call. = FALSE)
-      
-    long_obj <- dplyr::filter(long_obj, .data$parameter == out)
-  
-    p <- ggplot2::ggplot(
-      data = long_obj, 
-      mapping = ggplot2::aes(x = .data$.truth, y = .data$.pred)
+      p <- ggplot2::ggplot(
+      data = preds, 
+      mapping = ggplot2::aes(x = .data[[out]], y = .data[[".pred"]])
     ) +  
       ggplot2::geom_point(alpha = 0.3) +  
       ggplot2::geom_abline(color = 'blue', linetype = 2) +

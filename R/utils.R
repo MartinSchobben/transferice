@@ -57,13 +57,13 @@ species_naming <- function(workflow, id = NULL) {
 reverse_normalize <- function(data, recipe, predicted = FALSE) {
   
   stp_norm <- recipes::tidy(recipe, 1)
-  if (isTRUE(predicted)) {
-    stp_norm <- dplyr::mutate(stp_norm, terms = paste0(".pred_", terms))
-  }
   
+  if (isTRUE(predicted)) {
+    stp_norm <- dplyr::mutate(stp_norm, terms = ".pred")
+  }
+
   pms <- unique(stp_norm$terms)
   
-  # if (isTRUE(predicted)) pms <-paste0(".pred_", pms) 
   
   dplyr::mutate(
     data, 
