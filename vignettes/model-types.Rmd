@@ -26,8 +26,10 @@ For a starters we use again all dinocyst data but exclusively use temperature at
 ```{r splits}
 library(recipes)
 library(rsample)
+library(dplyr)
+# we take a subset as these models are more demanding
 # splitting
-dinodat_split <- initial_split(dinodat, prop = 0.75)# strata = "parameter") 
+dinodat_split <- initial_split(slice_sample(dinodat, n = 900), prop = 0.75)
 # training
 dinodat_train <- training(dinodat_split)
 # testing
@@ -37,19 +39,25 @@ dinodat_test <- testing(dinodat_split)
 vars <- role_organizer(dinodat, "t_an")
 # taxa
 txa <- vars[names(vars) == "predictor"]
+# new names
+new <- paste0("taxa_", seq_along(txa))
 
 # recipe
 rcp <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
    # rescale outcomes
   step_normalize(all_outcomes()) |> 
   # rename taxa
-  step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) |> 
+  step_rename(!!!rlang::set_names(txa, new)) |> 
   # rescale predictor
-  step_logit(all_predictors(), offset = 0.025) |> 
+  step_logit(dplyr::any_of(new), offset = 0.025) |> 
   # center predictors
-  step_center(all_predictors()) |> 
+  step_center(dplyr::any_of(new)) |> 
   # reduce dimensions
-  step_pca(all_predictors(), num_comp = 4) 
+  step_pca(dplyr::any_of(new), num_comp = tune::tune()) |> 
+  # remove location that lie close to each other
+  step_zerogeodist(lon = longitude, lat = latitude, skip = TRUE) |> 
+  # update spatial to predictor
+  recipes::update_role(longitude, latitude, new_role = "predictor")
 
 ```
 
@@ -59,23 +67,15 @@ library(nlme)
 library(parsnip)
 library(multilevelmod)
 
-# prep data
-dinodat_prep <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
-# fixed form
-fixed <- formula_parser(dinodat_prep, "t_an", aliases = "PC")
-
 # model
 gls_spec <- linear_reg() |> 
   set_engine(
     "gls",  
-    control = lmeControl(opt = 'optim')
+    control = nlme::lmeControl(opt = 'optim'),
+    correlation = nlme::corSpatial(form = ~longitude + latitude, type = "g" )
   )  |> 
   # usage of the model for regression
   set_mode('regression')
-
-gls_fit <- gls_spec |> 
- fit(fixed, data = dinodat_prep)
-
 ```
 
 
@@ -87,59 +87,40 @@ library(workflows)
 library(tune)
 library(yardstick)
 
+# workflow
 gls_wfl <- workflow() |> 
   add_recipe(rcp) |> 
-  add_model(gls_spec, formula = fixed) 
-
-gls_fit <- last_fit(gls_wfl, dinodat_split)
+  add_model(gls_spec) 
 
 # multiple cross validation
 dinodat_cv <- vfold_cv(training(dinodat_split), v = 10)
 
-dinodat_resamp <- fit_resamples(
-  gls_wfl, 
-  resamples = dinodat_cv,  
-  metrics = metric_set(rmse), 
+# tuning grid
+tune_grid <- dials::grid_regular(tune::extract_parameter_set_dials(gls_wfl), levels = 4)
+
+# tuning
+dinodat_tune <- tune::tune_grid(
+  gls_wfl,
+  resamples = dinodat_cv,
+  grid = tune_grid,
+  metrics = yardstick::metric_set(yardstick::rmse), 
   control = ctrl
 )
+
 ```
 
+```{r out}
+library(ggplot2)
+collect_metrics(dinodat_tune, summarize = FALSE) |> 
+  filter(.estimate < 100) |>
+  ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
+  geom_boxplot()
+```
 
 partial plots
  
 ```{r partial, options}
-ggpartial(dinodat_resamp, gls_wfl, pred = "PC1", out = "t_an", id = "test", plot_type = "static")
-```
-
-
-# spatial variance
-
-```{r spat}
-library(dplyr)
-# complex execution take smaller sample
-dinodat_prep_sm <- slice_sample(dinodat_prep, 100)
-
-# update recipe
-rcp <- rcp |> 
-  step_zerogeodist(lon = longitude, lat = latitude)
-
-# prep data
-dinodat_prep_sm <- prep(rcp, training = dinodat_train) |> bake(new_data= NULL)
-# correlation structure
-corr <- formula_parser(dinodat_prep_sm, "t_an", aliases = "PC", type = "correlation")
-
-# model with spatial correlation
-gls_xy_spec <- linear_reg() |> 
-  set_engine(
-    "gls",  
-    control = lmeControl(opt = 'optim'),
-    correlation = corSpatial(form = ~corr, type = "g" )
-  )  |> 
-  # usage of the model for regression
-  set_mode('regression')
-
-gls_xy_fit <- gls_xy_spec |> 
- fit(fixed, data = dinodat_prep_sm)
+ggpartial(dinodat_tune, gls_wfl, tune = 1, out = "t_an", id = "test", plot_type = "static")
 ```
 
 

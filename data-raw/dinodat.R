@@ -54,7 +54,9 @@ dinodat <- dplyr::left_join(
   by = c("hole_id", "sample_id")
 ) |> 
   # remove NAs
-  tidyr::drop_na() 
+  tidyr::drop_na() |> 
+  # sample poriton
+  dplyr::slice_sample(n = 300)
   
 # save data
 usethis::use_data(dinodat, overwrite = TRUE)

@@ -327,7 +327,10 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
                   "Traditional Ordinary Least Squares (OLS) regression and ", 
                  "Generalised Least Squares (GLS) regression. The latter deals", 
                  "with the lack of independence between observations due to ",
-                 "spatial proximity of sampling sites.")
+                 "spatial proximity of sampling sites.", 
+                 "Tobler's First Law of Geography: \"everything is related to", 
+                 "everything else, but near things are more related than ",
+                 "distant things.\"")
         )
       )
     }) 
@@ -374,7 +377,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds"))
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) |> 
+        dplyr::slice_sample(n = 600)
     })
     
     # re-sample
@@ -397,7 +401,6 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     # model
     mdl <- reactive({
     
-
       # linear regression
       mdl <- parsnip::linear_reg() |>
         parsnip::set_mode('regression')
@@ -409,26 +412,20 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         
       } else if (input$model == "gls") {
     
-        # correlation structure
-        corr <- formula_parser(prep, "t_an", type = "correlation")
-        
         mdl <- parsnip::set_engine(
           mdl,
           "gls",  
           control = nlme::lmeControl(opt = 'optim'),
-          correlation = nlme::corSpatial(form = ~corr, type = "g" )
+          correlation = nlme::corSpatial(form = ~longitude + latitude, type = "g" )
         )
         
       } else if (input$model == "nlme") {
         
-        # prepped data for formula structure
-        prep <- recipes::prep(rcp(), training = rsample::training(splt())) |> 
-          recipes::bake(new_data = NULL)
+
       }
       mdl
     })
     
-    observe(message(glue::glue("{str(mdl())}")))
     # workflow
     wfl <- reactive({
       workflows::workflow() |>

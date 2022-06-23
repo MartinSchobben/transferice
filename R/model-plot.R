@@ -55,7 +55,7 @@ ggpartial.mc_split <- function(
   # fallback for no supplied tune with a tuned recipe
   dls <- hardhat::extract_parameter_set_dials(recipe)
   if (nrow(dls) > 0) {
-    depth_dial <- length(recipe$steps) # depth of dial
+    depth_dial <- purrr::map_chr(recipe$steps, list("id")) |> stringr::str_detect("pca|pls") |> which() # depth of dial
     name_dial <- dls$name # name of dial
     # replace tuning parameter with fixed parameter based on `tune`
     purrr::pluck(recipe, "steps", depth_dial, name_dial) <- tune 

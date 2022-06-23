@@ -74,27 +74,24 @@ lm_model <- linear_reg() |>
 # install.packages("recipes")
 library(recipes)
 
-# parse formula
 # variables
-ids <- c("sample_id", "hole_id", "longitude", "latitude") # labels
-pms <- paste(abbreviate_vars(parms), "an", sep = "_") # parameters
-txa <- colnames(dinodat)[!colnames(dinodat) %in% c(ids, pms)] # taxa
-
-# roles
-rls <- c("id", "group", "spatial", "spatial", 
-         rep("outcome", length(pms)), rep("predictor", length(txa)))
+vars <- role_organizer(dinodat, "t_an")
+# taxa
+txa <- vars[names(vars) == "predictor"]
 
 # formula for recipes
-dinodat_recipe <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
+dinodat_recipe <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
   # scale all outcomes
   recipes::step_normalize(recipes::all_outcomes()) |> 
   # rename taxa
-  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa))))  |> 
+  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) |> 
   # make dino count log odds
-  step_logit(all_predictors(), offset = 0.025) |>  
+  step_logit(dplyr::any_of(txa), offset = 0.025) |>  
+  # center predictors
+  step_center(dplyr::any_of(txa)) |> 
   # reduce multi-dimensionality
-  step_pca(all_predictors(), options = list(center =  TRUE)) |> 
-  step_mutate(env = p_an, role = "outcome")
+  step_pca(dplyr::any_of(txa)) 
+
 ```
 
 Prepare and apply to training set
@@ -118,10 +115,7 @@ dinodat_test_prep <- prep(dinodat_recipe, training = dinodat_train) |>
 
 ```{r fit}
 # need to rewrite formula as parsnip does not accept multivariate model
-#fml <- formula_parser(pms, paste0("PC", 1:5), type = "tidymodels")
-
-fml <-as.formula(paste0("env~", paste0("PC", 1:5, collapse = "+")))
-
+fml <- formula_parser(dinodat, "t_an", aliases = "taxa_")
 
 # fit (OLS)
 lm_fit <- lm_model %>%   
@@ -133,15 +127,8 @@ lm_fit <- lm_model %>%
 # predicting
 dinodat_predict_lm <- predict(lm_fit, new_data = dinodat_test_prep)
 
-# bind test
-dinodat_test_prep_lm <- rename_with(
-  dinodat_test_prep, 
-  .cols = ends_with("_an"), 
-  .fn = ~paste0(".truth_", .x)
-)
-
 # results
-outcome <- bind_cols(dinodat_test_prep_lm, dinodat_predict_lm)
+outcome <- bind_cols(dinodat_test_prep, dinodat_predict_lm)
 ```
 
 # Evaluate model with yardstick
@@ -151,20 +138,10 @@ visualize fit
 
 ```{r viz}
 library(ggplot2)
-library(tidyr)
 
-long_outcome <- pivot_longer(
-  outcome,
-  cols = !c(sample_id, hole_id, longitude, latitude, PC1, PC2, PC3, PC4, PC5),
-  names_to = c(".value", "parameter"),
-  names_pattern = "(.*)_(._an)"
-)
-
-ggplot(long_outcome, aes(x = .truth, y = .pred)) +  
+ggplot(outcome, aes(x = t_an, y = .pred)) +  
   geom_point() +  
   geom_abline(color = 'blue', linetype = 2) +  
-  # coord_fixed() +  
-  facet_wrap(vars(parameter), scales = "free") +
   labs(
     title = 'R-Squared Plot',       
     y = 'Predicted',        
@@ -180,6 +157,8 @@ ggplot(long_outcome, aes(x = .truth, y = .pred)) +
 library(tune)
 library(workflows)
 library(yardstick)
+
+# workflow for regression analysis with reciped
 lm_wfl <- workflow() |> 
   add_recipe(dinodat_recipe) |> 
   add_model(lm_model)
@@ -195,15 +174,18 @@ Now we want to know what actually would be the optimal selection of components f
 ```{r tune}
 # install.packages("dials")
 library(dials)
-dinodat_recipe_tune <- recipe(x = dinodat, vars = c(ids, pms, txa), roles = rls) |> 
+# formula for recipes
+dinodat_recipe_tune <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
   # scale all outcomes
   recipes::step_normalize(recipes::all_outcomes()) |> 
   # rename taxa
-  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa))))  |> 
-  # center
-  step_logit(all_predictors(), offset = 0.025) |> 
-  # step_scale(all_outcomes()) |> 
-  step_pca(all_predictors(), num_comp = tune(), options = list(center =  TRUE))
+  recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) |> 
+  # make dino count log odds
+  step_logit(dplyr::any_of(paste0("taxa_", seq_along(txa))), offset = 0.025) |>  
+  # center predictors
+  step_center(dplyr::any_of(paste0("taxa_", seq_along(txa)))) |> 
+  # reduce multi-dimensionality
+  step_pca(dplyr::any_of(paste0("taxa_", seq_along(txa))), num_comp = tune()) 
 
 # update workflow
 (lm_tune_wfl <- update_recipe(lm_wfl, dinodat_recipe_tune))
@@ -221,15 +203,8 @@ dinodat_cv <- vfold_cv(dinodat_train, v = 10)
 grid search
 
 ```{r grid, cache=TRUE}
-# update dial  (original is only 4 comps) (take 20)
-library(hardhat)
-lm_tune_parms <- lm_tune_wfl |>
-  parameters() |>
-  update(num_comp = num_comp(c(1, 9)))
-
-lm_tune_parms|> hardhat::extract_parameter_dials("num_comp")
-
-lm_grid <- grid_regular(lm_tune_parms, levels = 9)
+# search frid
+lm_grid <- grid_regular(extract_parameter_set_dials(lm_tune_wfl), levels = 4)
 
 # seed for reproducibility
 set.seed(949004590)

@@ -11,12 +11,23 @@ test_that("partial regressions can be plotted with tuning", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipe
-  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", 
+                            dim_reduction = "PCA", model = "gls")
   
   # model
-  mdl <- parsnip::linear_reg() |>
-    parsnip::set_engine('lm') |>
-    parsnip::set_mode('regression')
+  # mdl <- parsnip::linear_reg() |>
+  #   parsnip::set_engine('lm') |>
+  #   parsnip::set_mode('regression')
+
+  # model
+  mdl <- linear_reg() |> 
+    set_engine(
+      "gls",  
+      control = nlme::lmeControl(opt = 'optim'),
+      correlation = nlme::corSpatial(form = ~longitude + latitude, type = "g" )
+    )  |> 
+    # usage of the model for regression
+    set_mode('regression')
   
   # workflow
   wfl <- workflows::workflow() |>
@@ -200,7 +211,7 @@ test_that("predictor arguments are supplied (tuned)", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipe
-  rcp <- transferice_recipe(dinodat, trans = "logit", dim_reduction = "PCA")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
   
   expect_error(
     pred_check(rcp, "1", NULL),

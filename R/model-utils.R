@@ -68,16 +68,19 @@ transferice_recipe <- function(
   # taxa
   txa <- vars[names(vars) == "predictor"]
   
+  # new names taxa
+  new_txa <- paste0("taxa_", seq_along(txa))
+  
   # recipe
   rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
     # scale all outcomes
     recipes::step_normalize(recipes::all_outcomes()) |> 
     # rename taxa
-    recipes::step_rename(!!!rlang::set_names(txa, paste0("taxa_", seq_along(txa)))) 
+    recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
   
   # transforming 
   if (isTruthy(trans)) {
-    rcp <- purrr::reduce(trans, transform_predictor, .init = rcp)
+    rcp <- purrr::reduce(trans, transform_predictor, .init = rcp, txa = new_txa)
   }
   
   # dimensions reduction (PCA)
@@ -85,23 +88,25 @@ transferice_recipe <- function(
     if (isTRUE(tunable)) {
       rcp <- recipes::step_pca(
         rcp,
-        recipes::all_predictors(), 
+        dplyr::any_of(new_txa), 
         num_comp = tune::tune()
       )
     } else {
       rcp <- recipes::step_pca(
         rcp,
-        recipes::all_predictors()
+        dplyr::any_of(new_txa)
       )
     }
   }
   
   #in case of spatial component with GLS add
   if (model == "gls") {
-    rcp <- step_zerogeodist(rcp, lon = longitude, lat = latitude, skip = TRUE)
+    rcp <- step_zerogeodist(rcp, lon = longitude, lat = latitude, skip = TRUE) |> 
+      recipes::update_role(longitude, latitude, new_role = "predictor")
   }
   
-  rcp
+  # make everything predictors
+  rcp 
 }
 
 transferice_tuning <- function(split, wfl) {
@@ -121,14 +126,9 @@ transferice_tuning <- function(split, wfl) {
     
   } else {
 
-    # setting model tuning parameters
-    dls <- wfl %>%
-      dials::parameters() %>%
-      # set PCA steps to 5 components total
-      update(num_comp = dials::num_comp(c(1, 5))) 
+    # tune grid
+    tune_grid <- dials::grid_regular(tune::extract_parameter_set_dials(wfl), levels = 4)
     
-    # tuning grid
-    tune_grid <- dials::grid_regular(dls, levels = 5)
     # tuning
     out <- tune::tune_grid(
       wfl,
@@ -171,30 +171,30 @@ print_metric <- function(dat, metric, sig = 1) {
 }
 
 # transform
-transform_predictor <- function(rcp, trans) {
+transform_predictor <- function(rcp, trans, txa) {
   switch(
     trans,
-    logit =  step_logit_center(rcp),
-    log = step_log_center(rcp),
-    normalize = step_nz_normalize(rcp) 
+    logit =  step_logit_center(rcp, txa),
+    log = step_log_center(rcp, txa),
+    normalize = step_nz_normalize(rcp, txa) 
   )
 }
 
 # remove near zero variance before normalizing
-step_nz_normalize <- function(rcp) {
-  recipes::step_nzv(rcp, recipes::all_predictors()) |> 
-    recipes::step_normalize(recipes::all_predictors())
+step_nz_normalize <- function(rcp, txa) {
+  recipes::step_nzv(rcp, dplyr::any_of(txa)) |> 
+    recipes::step_normalize(dplyr::any_of(txa))
 
 }
 
-step_logit_center <- function(rcp) {
-  recipes::step_logit(rcp, recipes::all_predictors(), offset = 0.025) |>
-    recipes::step_center(recipes::all_predictors())
+step_logit_center <- function(rcp, txa) {
+  recipes::step_logit(rcp, dplyr::any_of(txa), offset = 0.025) |>
+    recipes::step_center(dplyr::any_of(txa))
 }
 
-step_log_center <- function(rcp) {
-  recipes::step_log(rcp, recipes::all_predictors(), offset = 0.025) |>
-    recipes::step_center(recipes::all_predictors())
+step_log_center <- function(rcp, txa) {
+  recipes::step_log(rcp, dplyr::any_of(txa), offset = 0.025) |>
+    recipes::step_center(dplyr::any_of(txa))
 }
 
 # control resample of model fit
