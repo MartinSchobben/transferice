@@ -34,10 +34,11 @@ model_ui <- function(id) {
                 icon = icon('question-circle')
               ),
               selectInput(
-                NS(id, "model"), 
+                ns("model"), 
                 "Model type", 
                 choices = c("linear model (OLS)" = "ols",  "linear model (GLS)" = "gls")
               ),
+              uiOutput(ns("struct"))
             ),
             tabPanel("bayesian"),
             header = tagList(
@@ -51,7 +52,7 @@ model_ui <- function(id) {
               selectizeInput(
                 ns("taxo"), 
                 "Taxomomic depth", 
-                choices = c("subspecies", "species", "genera"), 
+                choices = c("species", "genera"), 
                 options = default_message()
               ),
               # variance-stabilizing transformations
@@ -199,7 +200,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     
     # base map (for kriging interpolation)
     base <- reactive({
-      browser()
+ 
       # parameter
       pm <- parms[abbreviate_vars(parms) == strsplit(data_id, "_")[[1]][2]]
       # base map (later on replace this)
@@ -271,6 +272,19 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
           max = 4, 
           value = 1, 
           ticks = FALSE
+        )
+      }
+    })
+    
+    # spatial correlation structure
+    output$struct <- renderUI({
+      
+      if (req(input$model) == "gls") {
+        selectInput(
+          NS(id, "spat"), 
+          "Spatial correlation structure", 
+          choices = c("spherical", "exponential", "gaussian", "linear", "rational"),
+          selected = "linear"
         )
       }
     })
@@ -377,14 +391,14 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) |> 
-        dplyr::slice_sample(n = 600)
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) #|>
+        #dplyr::slice_sample(n = 600)
     })
     
     # re-sample
     splt <- reactive({
       set.seed(1)
-      splt <- rsample::initial_split(dat(), prop = 0.75) 
+      splt <- rsample::initial_split(dat(), prop = 0.75, strata = "latitude") # stratify on most important latitude
     })
     
     # recipe
@@ -416,11 +430,17 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
           mdl,
           "gls",  
           control = nlme::lmeControl(opt = 'optim'),
-          correlation = nlme::corSpatial(form = ~longitude + latitude, type = "g" )
+          correlation = 
+            nlme::corSpatial(
+              form = ~longitude|latitude, 
+              type = input$spat, 
+              nugget = TRUE
+            )
         )
         
       } else if (input$model == "nlme") {
         
+        # to be included
 
       }
       mdl
@@ -428,9 +448,16 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     
     # workflow
     wfl <- reactive({
-      workflows::workflow() |>
-        workflows::add_recipe(rcp()) |>
-        workflows::add_model(mdl())
+      wfl <- workflows::workflow() |>
+        workflows::add_recipe(rcp())
+      if (input$model == "ols") {
+        wfl <- workflows::add_model(wfl, mdl()) 
+      } else if (input$model == "gls") {
+        # fixed formula should be supplied to prevent lon and lat to be included 
+        # as coefficients
+        fx <- formula_parser(dat(), pm(), exclude = c("longitude", "latitude"))
+        wfl <- workflows::add_model(wfl, mdl(), formula = fx) 
+      }
     })
     
     # tuning
@@ -452,7 +479,14 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     
     # finalize model (with or without tuning)
     final <- eventReactive(input$run, {
-      transferice_finalize(splt(), wfl(), input$comp)
+      
+      # name for caching
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      wfl_nm <- paste(wfl_nm, input$dim, input$comp, sep = "_") # add tune element
+      nm <- file_namer("rds", "validation", data_id, trans = wfl_nm)
+      
+      transferice_finalize(splt(), wfl(), input$comp) |> 
+        app_caching("rds", nm) # caching
     })
 
 #-------------------------------------------------------------------------------
@@ -485,7 +519,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       }
       
       # file metadata
-      if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
+      #if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
+      if (input$specs != "validation" || !isTruthy(input$diag))  viz <- "xy" else viz <- input$diag 
       wfl_label <- sanitize_workflow(wfl())
       file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
                               viz = viz, x = x)
@@ -493,7 +528,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       if (isTruthy(input$toggle)) width <- file$width else width <- file$height
       
       # output
-      list(dat = dat, viz = viz, type = type, file_name = file_name, width = width, height = height) 
+      list(dat = dat, viz = viz, type = type, file_name = file_name, 
+           width = width, height = height) 
     })
     
     # create plot or animation (save in `reactiveValues`)
@@ -528,7 +564,6 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     deleteFile = FALSE
     )
     
-    observe(message(glue::glue("{file_info()$file_name}")))
     # CV animations
     output$part  <- renderUI({
       if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
@@ -556,8 +591,6 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     deleteFile = FALSE
     )
     
-
-                               
     # render controller based on tuning results
     output$control <- renderUI({
       
@@ -568,24 +601,30 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         spec_nms
       )
       
-      if (!isTruthy(input$dims) && input$specs != "validation") {
-        selectInput(
-          NS(id, "peek"), 
-          "Taxa selection",
-          choices = spec_nms
-        )
-      } else if (input$dims == "PCA") {
-        selectInput(
-          NS(id, "comp"), 
-          "Principal component", 
-           choices = 1:4
-        )
+      if (input$specs != "validation") {
+        
+        if (!isTruthy(input$dims)) {
+          selectInput(
+            NS(id, "peek"), 
+            "Taxa selection",
+            choices = spec_nms
+          )
+        } else if (input$dims == "PCA") {
+          selectInput(
+            NS(id, "comp"), 
+            "Principal component", 
+             choices = 1:4
+          )
+        }
+        
       } else {
+        
         selectInput(
           NS(id, "diag"), 
           "Diagnostic",
-          choices = c("R-squared")
+          choices = c("R-squared" = "xy", "spatial" = "bubble")
         )
+        
       }
     }) 
     

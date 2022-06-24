@@ -10,7 +10,7 @@ cv_extraction <- function(tuned_cv = NULL, type = "mold") {
   
 }
 
-calc_partials <- function(partials, x, y) {
+calc_partials <- function(partials, x, y, exclude) {
   
   x <- rlang::enquo(x)
   y <- rlang::enquo(y)
@@ -19,33 +19,34 @@ calc_partials <- function(partials, x, y) {
   dplyr::transmute(
     partials, 
     id = .data$id,
-    .input = purrr::map2(
-      .data$.extracts,
-      .data$.input,
-      # reverse normalization
-      function(x, y) reverse_normalize(y, x$recipe)
-    ),
+    .input = .data$.input,
+    # .input = purrr::map2(
+    #   .data$.extracts,
+    #   .data$.input,
+    #   # reverse normalization
+    #   function(x, y) reverse_normalize(y, x$recipe)
+    # ),
     .output = purrr::map2(
       .data$.extracts, 
       .data$.input, 
-      ~calc_partials_(.x, .y, !!x, !!y)
+      ~calc_partials_(.x, .y, !!x, !!y, exclude)
     )
   ) 
  
 }
 
-calc_partials_ <- function(model, newdat, x, y) {
+calc_partials_ <- function(model, newdat, x, y, exclude) {
   
   x <- rlang::enquo(x)
   y <- rlang::enquo(y)
   
   dplyr::mutate(
     newdat, 
-    dplyr::across(-c(.data[[!!x]], .data[[!!y]]), mean, na.rm = TRUE)
+    dplyr::across(-c(.data[[!!x]], .data[[!!y]], !!!exclude), mean, na.rm = TRUE)
   ) |> 
-    predict(object = model$fit) |> 
+    predict(object = model$fit) #|>
     # reverse outcome normalization
-    reverse_normalize(model$recipe, TRUE)
+    #reverse_normalize(model$recipe, TRUE)
   
 }
 

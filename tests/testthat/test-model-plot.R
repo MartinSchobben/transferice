@@ -1,18 +1,23 @@
 test_that("partial regressions can be plotted with tuning", {
   
   # partial map projection
-  base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
-    oceanexplorer::filter_NOAA(depth = 0) |> 
-    stars::st_warp(crs = 4326) |> 
-    stars::st_downsample(n = 5)
+  # base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
+  #   oceanexplorer::filter_NOAA(depth = 0) |> 
+  #   stars::st_warp(crs = 4326) |> 
+  #   stars::st_downsample(n = 5)
   
   # resample
   set.seed(1)
-  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  splt <- rsample::initial_split(dinodat, prop = 0.75, strata = "latitude") 
   
   # recipe
-  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", 
-                            dim_reduction = "PCA", model = "gls")
+  rcp <- transferice_recipe(
+    dinodat, 
+    "t_an", 
+    trans = "log", 
+    dim_reduction = "PCA", 
+    model = "gls"
+  )
   
   # model
   # mdl <- parsnip::linear_reg() |>
@@ -20,26 +25,28 @@ test_that("partial regressions can be plotted with tuning", {
   #   parsnip::set_mode('regression')
 
   # model
-  mdl <- linear_reg() |> 
-    set_engine(
+  library(multilevelmod)
+  mdl <- parsnip::linear_reg() |> 
+    parsnip::set_engine(
       "gls",  
       control = nlme::lmeControl(opt = 'optim'),
-      correlation = nlme::corSpatial(form = ~longitude + latitude, type = "g" )
+      correlation = nlme::corSpatial(form = ~longitude|latitude, type = "g" , nugget = TRUE)
     )  |> 
     # usage of the model for regression
-    set_mode('regression')
+    parsnip::set_mode('regression')
   
   # workflow
+  fx <- formula_parser(dinodat, "t_an", exclude = c("longitude", "latitude"))
   wfl <- workflows::workflow() |>
     workflows::add_recipe(rcp) |>
-    workflows::add_model(mdl)
+    workflows::add_model(mdl, formula = fx)
   
   # tuning
   set.seed(2)
   tuned_cv <- transferice_tuning(splt, wfl)
   
   # final fit
-  final <- transferice_finalize(splt, wfl, 3)
+  final <- transferice_finalize(splt, wfl, 2)
   
   # inspect feature engineering
   vdiffr::expect_doppelganger(
@@ -79,6 +86,12 @@ test_that("partial regressions can be plotted with tuning", {
     ggpartial(final, wfl, out = "t_an")
   )
   
+  # bubble
+  vdiffr::expect_doppelganger(
+    "final fit regression",
+    ggpartial(final, wfl, out = "t_an", type = "bubble")
+  )
+  
   vdiffr::expect_doppelganger(
     "final fit spatial",
     ggpartial(final, wfl, out = "t_an", type = "spatial", 
@@ -96,7 +109,7 @@ test_that("partial regressions can be plotted without tuning", {
   
   set.seed(1)
   # resample
-  splt <- rsample::initial_split(dinodat, prop = 0.75) 
+  splt <- rsample::initial_split(dinodat, prop = 0.75, strata = "latitude") 
   
   # recipe
   rcp <- transferice_recipe(dinodat, "t_an", trans = "log")
@@ -146,6 +159,9 @@ test_that("partial regressions can be plotted without tuning", {
   
   # r squared plot
   ggpartial(final, wfl, pred = "taxa_2", out = "t_an")
+  
+  # bubbles
+  ggpartial(final, wfl, pred = "taxa_2", out = "t_an", type = "bubble")
 
   ggpartial(final, wfl, pred = "taxa_3", out = "t_an", type = "spatial", base_map = base)
 })

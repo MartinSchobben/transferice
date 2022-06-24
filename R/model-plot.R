@@ -65,9 +65,9 @@ ggpartial.mc_split <- function(
   # split object for training recipe
   prep <- recipes::prep(recipe, training = rsample::training(obj))  
     # apply to training data
-  cast <-  recipes::bake(prep, new_data = NULL) |> 
+  cast <-  recipes::bake(prep, new_data = NULL) #|> 
     # reverse normalization
-    reverse_normalize(prep)
+    # reverse_normalize(prep)
   
   if (return_type == "cast") return(cast)
 
@@ -176,7 +176,9 @@ ggpartial.tune_results <- function(
   if (!inherits(trytune, "try-error")) partials_fit <- trytune
 
   # predicted values
-  output <- calc_partials(partials_fit, !!x, !!y)
+  exclude <- NULL
+  if(stringr::str_detect(nm_fit, "gls")) exclude <- syms(c("longitude", "latitude"))
+  output <- calc_partials(partials_fit, !!x, !!y, exclude)
   
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
@@ -270,11 +272,14 @@ ggpartial.last_fit <- function(
   
   # name file, plot title and potential path
   parsed_pm <- parms[abbreviate_vars(parms) == gsub("_(.)*$", "", out)]
-  ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
+
   ttl_spat <- paste0("Difference in prediction")
   
   # extract predictions
-  preds <- tune::collect_predictions(obj)
+  test <- rsample::assessment(obj$splits[[1]]) |> 
+    dplyr::select(!dplyr::any_of(out))
+  preds <- tune::collect_predictions(obj) |> 
+    dplyr::bind_cols(test)
   
   if (type == "spatial") {
     
@@ -303,19 +308,54 @@ ggpartial.last_fit <- function(
       ggplot2::labs(title = ttl_spat, x = x_lbl)
       
   } else if (type == "xy") {
+    # title
+    ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
       
-      p <- ggplot2::ggplot(
+    p <- ggplot2::ggplot(
       data = preds, 
       mapping = ggplot2::aes(x = .data[[out]], y = .data[[".pred"]])
     ) +  
       ggplot2::geom_point(alpha = 0.3) +  
       ggplot2::geom_abline(color = 'blue', linetype = 2) +
+      # ggplot2::coord_fixed() +
       ggplot2::labs(
         title = ttl_reg,       
         y = 'Predicted',        
         x = 'Actual'
       )
-    }
+  } else if (type == "bubble") {
+    
+    # title
+    ttl_bub <- paste0("Bubble plot (", parsed_pm, ")")
+    
+    # get residuals and their sign
+    preds <- dplyr::mutate(
+      preds,
+      residuals = .data[[out]] - .data[[".pred"]]
+    )
+   
+    # bounds
+    lw <- round(quantile(preds$residuals, 0.25, na.rm = TRUE), 0) |> unname()
+    up <- round(quantile(preds$residuals, 0.75, na.rm = TRUE), 0) |> unname()
+
+    p <- ggplot2::ggplot(
+      data = preds, 
+      mapping = ggplot2::aes(
+        x = .data$longitude, 
+        y = .data$latitude, 
+        size = .data$residuals,
+        fill = .data$residuals
+      )
+    ) +  
+      ggplot2::geom_point(alpha = 0.3, shape = 21) +
+      ggplot2::labs(
+        x = "Longitude", y = "Latitude", title = ttl_bub
+      ) +
+      ggplot2::scale_size_continuous(breaks = c(lw, 0, up), range = c(1, 10)) +
+      scale_fill_distiller(direction = -1, palette="RdYlBu",  breaks = c(lw, 0, up)) +
+      # merge scales
+      ggplot2::guides(fill = ggplot2::guide_legend(), size = ggplot2::guide_legend()) 
+  }
   
     # add theme
     p + transferice_theme() 

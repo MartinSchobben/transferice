@@ -10,7 +10,9 @@ role_organizer <- function(
   # variables
   txa <- colnames(dat)[!colnames(dat) %in% c(outcome, group, temporal, spatial)] # taxa
   # aliases for taxa
-  if (!is.null(aliases)) txa <- paste0(aliases, seq_along(txa))
+  if (!is.null(aliases)) {
+    txa <- paste0(aliases, seq_along(txa)) 
+  } 
   
   # roles
   c(
@@ -30,19 +32,28 @@ role_organizer <- function(
 formula_parser <- function(
     dat,
     outcome, 
-    type = "ordinary",
-    aliases = FALSE
+    type = "fixed",
+    aliases = NULL,
+    exclude = NULL
   ) {
   
   vars <- role_organizer(dat, outcome, aliases = aliases)
   
   x <- paste0(vars[names(vars) == "predictor"], collapse = "+")
   
-  if (type ==  "ordinary") {
+  if (type ==  "fixed") {
     
+    
+    fm <- paste0(outcome, "~ .")
+    
+    # in case of correlation structure and tuning
+    if (!is.null(exclude)) {
+      exclude <- paste0(exclude, collapse = "-")
+      fm <- paste0(fm, "-", exclude)
 
-    as.formula(paste0(outcome, "~", x))
+    }
 
+    as.formula(fm)
     
   } else if (type == "random") {
     
@@ -74,7 +85,7 @@ transferice_recipe <- function(
   # recipe
   rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
     # scale all outcomes
-    recipes::step_normalize(recipes::all_outcomes()) |> 
+    # recipes::step_normalize(recipes::all_outcomes()) |> 
     # rename taxa
     recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
   
@@ -112,7 +123,7 @@ transferice_recipe <- function(
 transferice_tuning <- function(split, wfl) {
   
   # cross validation resampling
-  dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10)
+  dat_cv <- rsample::vfold_cv(rsample::training(split), v = 10, strata = "latitude")
   
   # are there tune parameter then tune them
   if (nrow(hardhat::extract_parameter_set_dials(wfl)) == 0) {

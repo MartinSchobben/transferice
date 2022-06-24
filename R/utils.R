@@ -42,7 +42,7 @@ calc_taxon_prop <- function(
 species_naming <- function(workflow, id = NULL) {
   
   nms <- hardhat::extract_preprocessor(workflow) |> 
-    recipes::tidy(2) 
+    recipes::tidy(1) # or 2 if normalised 
   
   if (is.null(id)) {
     id <- paste0("taxa_", 1:nrow(nms))

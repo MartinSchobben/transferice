@@ -56,7 +56,7 @@ dinodat <- dplyr::left_join(
   # remove NAs
   tidyr::drop_na() |> 
   # sample poriton
-  dplyr::slice_sample(n = 300)
+  dplyr::slice_sample(n = 600)
   
 # save data
 usethis::use_data(dinodat, overwrite = TRUE)
