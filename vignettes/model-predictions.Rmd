@@ -1,0 +1,194 @@
+---
+title: "model-types"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{model-types}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(transferice)
+```
+
+# Data resampling and feature engineering
+
+```{r splits}
+library(recipes)
+library(rsample)
+library(dplyr)
+# splitting
+dinodat_split <- initial_split(dinodat, prop = 0.75, strata = "latitude")
+# training
+dinodat_train <- training(dinodat_split)
+# testing
+dinodat_test <- testing(dinodat_split)
+
+# variables
+vars <- role_organizer(dinodat, "t_an")
+# taxa
+txa <- vars[names(vars) == "predictor"]
+# new names
+new <- paste0("taxa_", seq_along(txa))
+
+# recipe
+rcp <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
+  # rename taxa
+  step_rename(!!!rlang::set_names(txa, new)) |> 
+  # rescale predictor
+  step_log(dplyr::any_of(new), offset = 0.025) |> 
+  # center predictors
+  step_center(dplyr::any_of(new)) |> 
+  # reduce dimensions
+  step_pca(dplyr::any_of(new), num_comp = tune::tune()) |> 
+  # remove location that lie close to each other
+  step_zerogeodist(lon = longitude, lat = latitude, skip = TRUE) |> 
+  # update spatial to predictor
+  recipes::update_role(longitude, latitude, new_role = "predictor")
+
+```
+
+# Model specifications
+
+```{r}
+library(nlme)
+library(parsnip)
+library(multilevelmod)
+
+# model
+gls_spec <- linear_reg() |> 
+  set_engine(
+    "gls",  
+    control = nlme::lmeControl(opt = 'optim'),
+    correlation = nlme::corSpatial(form = ~longitude|latitude, type = "g" )
+  )  |> 
+  # usage of the model for regression
+  set_mode('regression')
+```
+
+# Workflow for training
+
+```{r workflow}
+library(workflows)
+library(tune)
+library(yardstick)
+
+# fixed formula
+fx <- formula_parser(dinodat, "t_an", exclude = c("longitude", "latitude"))
+  
+# workflow
+gls_wfl <- workflow() |> 
+  add_recipe(rcp) |> 
+  add_model(gls_spec, formula = fx) 
+
+# multiple cross validation
+dinodat_cv <- vfold_cv(
+  training(dinodat_split), 
+  v = 10, 
+  strata = "latitude"
+)
+
+# tuning grid
+tune_grid <- dials::grid_regular(
+  tune::extract_parameter_set_dials(gls_wfl), 
+  levels = 4
+)
+
+# tuning
+dinodat_tune <- tune::tune_grid(
+  gls_wfl,
+  resamples = dinodat_cv,
+  grid = tune_grid,
+  metrics = yardstick::metric_set(yardstick::rmse)
+)
+
+```
+
+```{r out}
+library(ggplot2)
+collect_metrics(dinodat_tune, summarize = FALSE) |> 
+  filter(.estimate < 100) |>
+  ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
+  geom_boxplot()
+```
+
+# Select final model
+
+```{r label, options}
+# select model with 4 PCs
+gls_wfl  <- tune::finalize_workflow(
+  gls_wfl ,
+  tibble::tibble(num_comp = 4)
+)
+
+# metrics to return
+mts <- yardstick::metric_set(
+  yardstick::rmse
+)
+
+# fit the final model (does not need to be tuned)
+final <- tune::last_fit(gls_wfl, split = dinodat_split, metrics = mts)
+```
+
+```{r check}
+ggpartial(final, gls_wfl, pred = "taxa_2", out = "t_an", type = "bubble")
+```
+
+# Predictions
+
+```{r predict, options}
+
+# finalized workflow fitted on all data
+final_fit <- fit(gls_wfl, data = dinodat)
+
+# new recipe
+# variables
+vars <- role_organizer(fossil_dinodat, NULL)
+# taxa
+txa <- vars[names(vars) == "predictor"]
+# new names
+new <- paste0("taxa_", seq_along(txa))
+
+# recipe
+rcp <- recipe(x = fossil_dinodat, vars = vars, roles = names(vars)) |> 
+  # rename taxa
+  step_rename(!!!rlang::set_names(txa, new)) |> 
+  # rescale predictor
+  step_log(dplyr::any_of(new), offset = 0.025) |> 
+  # center predictors
+  step_center(dplyr::any_of(new)) |> 
+  # reduce dimensions (with 4 dims)
+  step_pca(dplyr::any_of(new), num_comp = 4) |> 
+  # update spatial to predictor
+  update_role(longitude, latitude, new_role = "predictor")
+
+# extract model
+final_mdl <- final_fit |> extract_fit_parsnip()
+
+# bake fossil data
+fossil_dinodat_prepped <- prep(rcp, training = fossil_dinodat) |> 
+  bake(new_data = NULL)
+
+# predict on new data
+pred <- predict(final_mdl, new_data = fossil_dinodat_prepped)
+
+# add to original data
+fossil_temperature <- bind_cols(fossil_dinodat, pred) |> 
+  left_join(fossil_dinodat_meta, by = "sample_id")
+
+
+ggplot(fossil_temperature, aes(x = Age_Ma, y = .pred)) +
+  geom_point() +
+  geom_line() +
+  scale_x_reverse() +
+  ylab(oceanexplorer::env_parm_labeller("t"))
+```
+
+
