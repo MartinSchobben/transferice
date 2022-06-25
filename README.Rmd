@@ -30,13 +30,6 @@ You can install the development version of transferice from GitHub with devtools
 ``` r
 # Install tranferice from GitHub: 
 # install.packages("devtools")
-devtools::install_github("")
-```
-
-## Example
-
-This is a basic example which shows you how to solve a common problem:
-
-```{r example}
+devtools::install_github("UtrechtUniversity/transferice")
 ```
 
