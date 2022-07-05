@@ -30,9 +30,9 @@ ggpartial <- function(obj, ...) {
 ggpartial.mc_split <- function(
     obj, 
     workflow, 
-    pred = NULL, 
+    out,
+    pred = NULL,
     tune = NULL, 
-    out, 
     type = "xy",
     base_map = NULL,
     return_type =  "plot",
@@ -134,30 +134,40 @@ ggpartial.mc_split <- function(
 #' @export
 ggpartial.tune_results <- function(
     obj, 
-    workflow = NULL,
-    pred = NULL, 
+    workflow,
+    out,
+    pred = NULL,
     tune = NULL, 
-    out, 
     type = "xy", 
     base_map = NULL, 
     plot_type =  "dynamic",
-    id,
+    id = NULL,
     mc_cores = 2
   ) {
   
-  # memoised partials function
-  nm_fit <- file_namer("rds", "training", id, "partial_fit", 
-                       trans = sanitize_workflow(workflow))
-  # nm_rcp <- file_namer("rds", "training", id, "partial_recipe", 
-  #                      trans = sanitize_workflow(workflow))
-
-  # partial fits
-  partials_fit <- cv_extraction(obj) |> 
-    app_caching("rds", nm_fit) # caching
+  # exclude from predicted values
+  exclude <- NULL
   
-  # partial trained recipes
-  # partials_rcp <- cv_extraction(obj, "recipe") |> 
-  #   app_caching("rds", nm_rcp) # caching
+  # partial fits
+  if (is.null(id)) {
+    
+    # partials function
+    partials_fit <- cv_extraction(obj) 
+    
+  } else {
+    
+    # memoised partials function
+    nm_fit <- file_namer("rds", "training", id, "partial_fit", 
+                         trans = sanitize_workflow(workflow))
+    partials_fit <- cv_extraction(obj) |> 
+      app_caching("rds", nm_fit) # caching
+    
+    # exclude from predicted values
+    if(stringr::str_detect(nm_fit, "gls")) {
+      exclude <- syms(c("longitude", "latitude"))
+    }
+    
+  }
   
   # predictor variable
   x <- pred_check(obj, pred, tune)
@@ -175,9 +185,6 @@ ggpartial.tune_results <- function(
   trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
   if (!inherits(trytune, "try-error")) partials_fit <- trytune
 
-  # predicted values
-  exclude <- NULL
-  if(stringr::str_detect(nm_fit, "gls")) exclude <- syms(c("longitude", "latitude"))
   output <- calc_partials(partials_fit, !!x, !!y, exclude)
   
   # plot y-axis label for the predicted values
@@ -254,10 +261,10 @@ ggpartial.tune_results <- function(
 #' @export
 ggpartial.last_fit <- function(
     obj, 
-    workflow = NULL, 
+    workflow, 
+    out, 
     pred = NULL, 
     tune = NULL, 
-    out, 
     type = "xy",
     base_map = NULL,
     id
@@ -352,7 +359,7 @@ ggpartial.last_fit <- function(
         x = "Longitude", y = "Latitude", title = ttl_bub
       ) +
       ggplot2::scale_size_continuous(breaks = c(lw, 0, up), range = c(1, 10)) +
-      scale_fill_distiller(direction = -1, palette="RdYlBu",  breaks = c(lw, 0, up)) +
+      ggplot2::scale_fill_distiller(direction = -1, palette="RdYlBu",  breaks = c(lw, 0, up)) +
       # merge scales
       ggplot2::guides(fill = ggplot2::guide_legend(), size = ggplot2::guide_legend()) 
   }
@@ -369,24 +376,22 @@ ggpartial.last_fit <- function(
 # predictor variable (either for tuning or just inspection)
 pred_check <- function(dat, pred, tune) {
   
-  if (all(!isTruthy(pred),  !isTruthy(tune))) {
-    stop(paste("Either `pred` or `tune` needs to be supplied!"), call. = FALSE)
+  if (!isTruthy(pred)) {
+    stop("`pred` needs to be supplied!", call. = FALSE)
   }
   
   if (inherits(dat, "recipe")) {
+    
     # check if recipe has tune dials
     dls <- hardhat::extract_parameter_set_dials(dat)$name
-    if (all(length(dls) == 0, !isTruthy(pred))) {
-      stop(paste("The model has NOT been tuned and therefore `pred` needs to be", 
-                 "supplied!"), call. = FALSE)    
-    } else  if (all(length(dls) == 0, isTruthy(pred))) {
-      x <- rlang::ensym(pred) 
-    } else if (all(length(dls) > 0, !isTruthy(tune))) {
-      stop(paste("The model has been tuned and therefore `tune` needs to be", 
-                 "supplied!"), call. = FALSE)
-    } else if (all(length(dls) > 0, isTruthy(tune))) {
-      x <- rlang::sym(paste0("PC", tune))
-    }
+    
+    if (all(length(dls) != 0, !isTruthy(tune))) {
+
+      stop("The model has been tuned and therefore `tune` needs to be ", 
+           "supplied!", call. = FALSE)
+    } 
+    
+    x <- rlang::ensym(pred)
     
   }
   
@@ -397,15 +402,25 @@ pred_check <- function(dat, pred, tune) {
       # number of components used for prediction
       mold <- dat$.workflow[[1]] |> 
         workflows::extract_mold()
-      n_comps <- ncol(mold$predictors) # dimensions after processing
-      n_preds <- mold$blueprint$recipe$var_info |>  # dimensions original
+      # dimensions after processing
+      n_comps <- ncol(mold$predictors)
+      # dimensions original
+      n_preds <- mold$blueprint$recipe$var_info |> 
         dplyr::filter(role == "predictor") |> 
         nrow()
       
       if (n_preds == n_comps) {
+        
         x <- pred
-      } else if (n_preds > n_comps) {
+        
+      } else if (all(n_preds > n_comps, isTruthy(tune))) {
+        
         x <- paste0(n_comps, "PCs") # return number of components tuning
+      
+      } else {
+        
+        stop("The model has been tuned and therefore `tune` needs to be ", 
+             "supplied!", call. = FALSE)
       }
       
     } else {
@@ -413,17 +428,14 @@ pred_check <- function(dat, pred, tune) {
       # check if results are tuned (class 'resample_results' is not tuned)
       nottuned <- inherits(dat, 'resample_results')
       
-      if (all(nottuned, !isTruthy(pred))) {
-        stop(paste("The model has NOT been tuned and therefore `pred` needs to", 
-                   " be supplied!"), call. = FALSE)    
-      } else  if (all(nottuned, isTruthy(pred))) {
-        x <- rlang::ensym(pred) 
-      } else if (all(!nottuned, !isTruthy(tune))) {
-        stop(paste("The model has been tuned and therefore `tune` needs to be", 
-                   "supplied!"), call. = FALSE)
-      } else if (all(!nottuned, isTruthy(tune))) {
-        x <- rlang::sym(paste0("PC", tune))
+      if (all(!nottuned, !isTruthy(tune))) {
+        
+        stop("The model has been tuned and therefore `tune` needs to be ", 
+             "supplied!", call. = FALSE)
       }
+        
+      x <- rlang::ensym(pred)
+      
     }
   }
   

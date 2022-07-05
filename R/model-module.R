@@ -391,14 +391,14 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) #|>
-        #dplyr::slice_sample(n = 600)
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
     })
     
     # re-sample
     splt <- reactive({
       set.seed(1)
-      splt <- rsample::initial_split(dat(), prop = 0.75, strata = "latitude") # stratify on most important latitude
+      # stratify on most important latitude
+      splt <- rsample::initial_split(dat(), prop = 0.75, strata = "latitude") 
     })
     
     # recipe
@@ -469,7 +469,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
-      nm <- file_namer("rds", "training", data_id, trans = wfl_nm)
+      nm <- file_namer("rds", "training", data_id, trans = wfl_nm) # file name
       
       # tuning
       set.seed(2)
@@ -478,14 +478,18 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     })
     
     # finalize model (with or without tuning)
-    final <- eventReactive(input$run, {
+    final <- eventReactive({input$run ; input$ncomp}, {
       
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
-      wfl_nm <- paste(wfl_nm, input$dim, input$comp, sep = "_") # add tune element
+      # add tune element
+      if (isTruthy(input$dim)) {
+        wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
+      }
+      # file name
       nm <- file_namer("rds", "validation", data_id, trans = wfl_nm)
       
-      transferice_finalize(splt(), wfl(), input$comp) |> 
+      transferice_finalize(splt(), wfl(), input$ncomp) |> 
         app_caching("rds", nm) # caching
     })
 
@@ -510,23 +514,29 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       
       # fitted data requires a species name variable selection
       if (isTruthy(input$dims))  {
-        req(input$comp) 
-        x <- input$comp
+        req(input$ncomp)
+        x <- paste0(input$comp, "of", input$ncomp)
       # tuned data requires a dimension variable selection
       } else {
         req(input$peek)
         x <- input$peek
       }
-      
+
       # file metadata
-      #if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
-      if (input$specs != "validation" || !isTruthy(input$diag))  viz <- "xy" else viz <- input$diag 
+      if (input$specs != "validation" || !isTruthy(input$diag)) {
+        viz <- "xy" 
+      } else {
+        viz <- input$diag 
+      }
+      
+      # workflow    
       wfl_label <- sanitize_workflow(wfl())
+      
+      # file name
       file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
                               viz = viz, x = x)
-      height <- file$height
-      if (isTruthy(input$toggle)) width <- file$width else width <- file$height
-      
+      width <- height <- file$height
+   
       # output
       list(dat = dat, viz = viz, type = type, file_name = file_name, 
            width = width, height = height) 
@@ -535,12 +545,20 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     # create plot or animation (save in `reactiveValues`)
     observe({
 
+      # predictor
+      if (isTruthy(input$dims)) {
+        req(input$comp)
+        pred <- input$comp
+      } else {
+        pred <- input$peek
+      }
+      
       file$path <- ggpartial(
         obj = file_info()$dat,
         workflow = wfl(),
-        pred = input$peek,
-        tune = input$comp,
         out = pm(),
+        pred = pred,
+        tune = input$ncomp,
         type = file_info()$viz,
         base_map = NULL, #base(),
         id = data_id
@@ -551,18 +569,21 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 
     })
 
-    # cross plots
-    output$eng <- renderImage({
-      req(file$path)
-      list(
-        height = file$height, 
-        width = if (isTruthy(input$toggle)) file$width else file$height, 
-        src = file$path, 
-        contentType = 'image/png'
-      )
+    # cross plots and validation plots
+    output$eng <- output$final <- renderImage({
+      if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
+        list(
+          height = file$height, 
+          width = file$height, 
+          src = file$path, 
+          contentType = 'image/png'
+        )
+      }
     },
     deleteFile = FALSE
     )
+    
+    observe(message(glue::glue("{file$path}")))
     
     # CV animations
     output$part  <- renderUI({
@@ -577,19 +598,6 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         )
       }
     })
-    
-    # final model image
-    output$final <- renderImage({
-      req(file$path)
-      list(
-        height = file$height, 
-        width = if (isTruthy(input$toggle)) file$width else file$height, 
-        src = file$path, 
-        contentType = 'image/png'
-      )
-    },
-    deleteFile = FALSE
-    )
     
     # render controller based on tuning results
     output$control <- renderUI({
@@ -610,10 +618,11 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
             choices = spec_nms
           )
         } else if (input$dims == "PCA") {
+        
           selectInput(
             NS(id, "comp"), 
             "Principal component", 
-             choices = 1:4
+             choices = paste0("PC", 1:req(input$ncomp))
           )
         }
         
