@@ -84,7 +84,7 @@ bake.step_taxo <- function(object, new_data, ...) {
   tidyr::pivot_longer(dinodat, !dplyr::all_of(object$terms)) |> 
     tidyr::separate(name, into = c("genera", "species"), extra = "merge", 
                     fill = "right") |> 
-    dplyr::group_by(!!!rlang::.syms(c(object$terms, "genera"))) |> 
+    dplyr::group_by(!!!rlang::syms(c(object$terms, "genera"))) |> 
     dplyr::summarise(value = sum(value), .groups = "drop") |> 
     tidyr::pivot_wider(names_from = "genera", values_from = "value") 
 

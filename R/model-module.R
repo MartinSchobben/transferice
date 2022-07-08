@@ -49,11 +49,12 @@ model_ui <- function(id) {
                 "", 
                 icon = icon('question-circle')
               ),
-              selectizeInput(
+              selectInput(
                 ns("taxo"), 
                 "Taxomomic depth", 
                 choices = c("species", "genera"), 
-                options = default_message()
+                selected = "species"
+                # options = default_message()
               ),
               # variance-stabilizing transformations
               actionLink(
@@ -391,14 +392,44 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+
+      if (input$taxo == "genera") {
+        
+        # all variables and their roles
+        vars <- role_organizer(dt, pm())
+        
+        # taxa
+        txa <- vars[names(vars) == "predictor"] |> unname()
+        
+        # variables not used in transform
+        terms <- vars[names(vars) != "predictor"]
+        
+        dt <- recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
+          step_taxo(dplyr::any_of(unname(terms))) |> 
+          recipes::prep(training = dt) |> 
+          recipes::bake(NULL) 
+      } 
+      
+      # all variables and their roles
+      vars <- role_organizer(dt, pm())
+      
+      # taxa
+      txa <- vars[names(vars) == "predictor"] |> unname()
+      
+      # remove the very rare taxa
+      recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
+        recipes::step_nzv(dplyr::any_of(txa))  |> 
+        recipes::prep(training = dt) |> 
+        recipes::bake(NULL) 
+      
     })
     
     # re-sample
     splt <- reactive({
       set.seed(1)
       # stratify on most important latitude
-      splt <- rsample::initial_split(dat(), prop = 0.75, strata = "latitude") 
+      splt <- rsample::initial_split(dat(), prop = 0.8, strata = "latitude") 
     })
     
     # recipe
@@ -468,7 +499,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       on.exit(waiter$hide())
       
       # name for caching
-      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
       nm <- file_namer("rds", "training", data_id, trans = wfl_nm) # file name
       
       # tuning
@@ -481,7 +512,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     final <- eventReactive({input$run ; input$ncomp}, {
       
       # name for caching
-      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
       # add tune element
       if (isTruthy(input$dim)) {
         wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
@@ -529,7 +560,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       }
       
       # workflow    
-      wfl_label <- sanitize_workflow(wfl())
+      wfl_label <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_")
       
       # file name
       file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
@@ -618,8 +649,10 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
           selectInput(
             NS(id, "peek"), 
             "Taxa selection",
-            choices = spec_nms
+            choices = spec_nms,
+            selected = isolate(input$peek)
           )
+          
         } else if (input$dims == "PCA") {
         
           selectInput(
@@ -628,6 +661,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
             choices = paste0("PC", 1:req(input$ncomp)),
             selected = isolate(input$comp)
           )
+          
         }
         
       } else {

@@ -83,9 +83,7 @@ transferice_recipe <- function(
   new_txa <- paste0("taxa_", seq_along(txa))
   
   # recipe
-  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
-    # scale all outcomes
-    # recipes::step_normalize(recipes::all_outcomes()) |> 
+  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |>   
     # rename taxa
     recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
   
@@ -193,9 +191,7 @@ transform_predictor <- function(rcp, trans, txa) {
 
 # remove near zero variance before normalizing
 step_nz_normalize <- function(rcp, txa) {
-  recipes::step_nzv(rcp, dplyr::any_of(txa)) |> 
-    recipes::step_normalize(dplyr::any_of(txa))
-
+  recipes::step_normalize(rcp, dplyr::any_of(txa))
 }
 
 step_logit_center <- function(rcp, txa) {
