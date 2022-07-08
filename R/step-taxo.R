@@ -1,7 +1,7 @@
-#' Pivot Table
+#' Reduce taxonomic depth
 #'
-#' `step_pivot` creates a *specification* of a recipe
-#'  step that will pivot data for multilevel models.
+#' `step_taxa` creates a *specification* of a recipe
+#'  step that will reduce the taxonomic depth.
 #'
 #' @param recipe A recipe object. The step will be added to the
 #'  sequence of operations for this recipe.
@@ -11,9 +11,6 @@
 #'  created.
 #' @param trained A logical to indicate if the quantities for
 #'  preprocessing have been estimated.
-#' @param options A list of options to the default method for
-#'  [tidyr::pivot_longer()]. Argument defaults are set to `names_to = "names` 
-#'  and `values_to = "values"`.
 #' @param skip A logical. Should the step be skipped when the
 #'  recipe is baked by [bake()]? While all operations are baked
 #'  when [prep()] is run, some operations may not be able to be
@@ -24,63 +21,48 @@
 #'
 #' @return step
 #' @export
-step_pivot <- function(
+step_taxo <- function(
   recipe, 
   ..., 
-  role = c("predictor", "outcome"), 
-  trained = FALSE,
-  options = list(names_to = "name", values_to = "value"), 
+  role = "predictor", 
+  trained = FALSE, 
   skip = FALSE,
-  id = recipes::rand_id("pivot")
+  id = recipes::rand_id("taxo")
 ) {
   
   recipes::add_step(
     recipe, 
-    step_pivot_new(
+    step_taxo_new(
       terms = enquos(...), 
       trained = trained,
-      role = role[1], 
-      options = options$names_to,
+      role = role,
       skip = skip,
       id = id
     )
-  ) |> 
-    recipes::add_step(
-  
-      recipes:::step_mutate_new(
-        trained = trained,
-        role = role[2],
-        inputs = options$values_to,
-        skip = skip,
-        id = rand_id("mutate")
-      )
-
-    )
+  ) 
   
 }
 
-step_pivot_new <- function (
+step_taxo_new <- function (
     terms,
     role, 
     trained,
-    options,
     skip,
     id
   ) {
   
   recipes::step(
-    subclass = "pivot", 
+    subclass = "taxo", 
     terms = terms,
     role = role,
     trained = trained,
-    options = options,
     skip = skip,
     id = id
   )
 }
 #' @importFrom recipes prep
 #' @export
-prep.step_pivot <- function(x, training, info = NULL, ...) {
+prep.step_taxo <- function(x, training, info = NULL, ...) {
   
   # extract the selection columns
   terms <- recipes::recipes_eval_select(x$terms, training, info) 
@@ -88,25 +70,28 @@ prep.step_pivot <- function(x, training, info = NULL, ...) {
   ## Use the constructor function to return the updated object. 
   ## Note that `trained` is now set to TRUE
 
-  step_pivot_new(
+  step_taxo_new(
     terms = terms, 
     trained = TRUE,
     role = x$role, 
-    options = x$options,
     skip = x$skip,
     id = x$id
   )
 }
 #' @importFrom recipes bake
 #' @export
-bake.step_pivot <- function(object, new_data, ...) {
-  rlang::inject(
-    tidyr::pivot_longer(new_data, cols = dplyr::all_of(object$terms), !!!object$options)
-  ) 
+bake.step_taxo <- function(object, new_data, ...) {
+  tidyr::pivot_longer(dinodat, !dplyr::all_of(object$terms)) |> 
+    tidyr::separate(name, into = c("genera", "species"), extra = "merge", 
+                    fill = "right") |> 
+    dplyr::group_by(!!!rlang::.syms(c(object$terms, "genera"))) |> 
+    dplyr::summarise(value = sum(value), .groups = "drop") |> 
+    tidyr::pivot_wider(names_from = "genera", values_from = "value") 
+
 }
 #' @importFrom recipes tidy
 #' @export
-tidy.step_pivot <- function(x, ...) {
+tidy.step_taxo <- function(x, ...) {
     term_names <- sel2char(x$terms)
     res <-
       tibble(

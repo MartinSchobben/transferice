@@ -514,8 +514,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       
       # fitted data requires a species name variable selection
       if (isTruthy(input$dims))  {
-        req(input$ncomp)
-        x <- paste0(input$comp, "of", input$ncomp)
+        x <- paste0(req(input$comp), "of", req(input$ncomp))
       # tuned data requires a dimension variable selection
       } else {
         req(input$peek)
@@ -545,11 +544,14 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     # create plot or animation (save in `reactiveValues`)
     observe({
 
+      req(file_info())
+      
       # predictor
       if (isTruthy(input$dims)) {
         req(input$comp)
         pred <- input$comp
       } else {
+        req(input$peek)
         pred <- input$peek
       }
       
@@ -571,6 +573,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 
     # cross plots and validation plots
     output$eng <- output$final <- renderImage({
+
       if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
         list(
           height = file$height, 
@@ -622,7 +625,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
           selectInput(
             NS(id, "comp"), 
             "Principal component", 
-             choices = paste0("PC", 1:req(input$ncomp))
+            choices = paste0("PC", 1:req(input$ncomp)),
+            selected = isolate(input$comp)
           )
         }
         

@@ -69,7 +69,8 @@ test_that("partial regressions can be plotted with tuning", {
   # partial regressions
   vdiffr::expect_doppelganger(
     "partial regression",
-    ggpartial(tuned_cv, wfl,  out = "t_an", pred = "PC1", tune = 1, plot_type = "static")
+    ggpartial(tuned_cv, wfl,  out = "t_an", pred = "PC1", tune = 1, 
+              plot_type = "static")
   )
   
   # vdiffr::expect_doppelganger(

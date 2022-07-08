@@ -181,15 +181,19 @@ ggpartial.tune_results <- function(
                 "`type` = 'spatial'."), call. = FALSE)
   }
   
-  # check if tuned then subset num_comp (filter only what's needed)
-  trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
-  if (!inherits(trytune, "try-error")) partials_fit <- trytune
-
-  output <- calc_partials(partials_fit, !!x, !!y, exclude)
-  
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
   x_lbl <- species_naming(workflow, as_name(x))
+  
+  # check if tuned then subset num_comp (filter only what's needed)
+  trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
+  if (!inherits(trytune, "try-error")) {
+    partials_fit <- trytune
+    # label will be component name
+    x_lbl <-as_name(x)
+  }
+
+  output <- calc_partials(partials_fit, !!x, !!y, exclude)
   
   # determine type of statistics and build plot base
   if (type == "spatial") {
