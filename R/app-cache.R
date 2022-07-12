@@ -81,7 +81,7 @@ file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocesse
                        viz = NULL, x = NULL) {
   
   stopifnot(prefix %in% c("raw", "engineering", "training", "validation"))
-  if (type != "rds") stopifnot(viz %in% c("spatial", "xy", "bubble"))
+  if (type != "rds") stopifnot(viz %in% c("spatial", "xy", "bubble", "boxplot", "histogram"))
   if (type != "rds") stopifnot(all(!is.null(viz), !is.null(x)))
   
   # core names

@@ -50,26 +50,19 @@ ggpartial.mc_split <- function(
   
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  x_lbl <- species_naming(workflow, as_name(x))
-  
-  # fallback for no supplied tune with a tuned recipe
-  dls <- hardhat::extract_parameter_set_dials(recipe)
-  if (nrow(dls) > 0) {
-    depth_dial <- purrr::map_chr(recipe$steps, list("id")) |> stringr::str_detect("pca|pls") |> which() # depth of dial
-    name_dial <- dls$name # name of dial
-    # replace tuning parameter with fixed parameter based on `tune`
-    purrr::pluck(recipe, "steps", depth_dial, name_dial) <- tune 
+  if (grepl("PC", as_name(x))) {
     x_lbl <- as_name(x)
+  } else {
+    x_lbl <- species_naming(workflow, as_name(x))
   }
   
+  # fallback for no supplied tune with a tuned recipe
+  recipe <- untune(recipe, tune)
+
   # split object for training recipe
   prep <- recipes::prep(recipe, training = rsample::training(obj))  
-    # apply to training data
-  cast <-  recipes::bake(prep, new_data = NULL) #|> 
-    # reverse normalization
-    # reverse_normalize(prep)
-  
-  if (return_type == "cast") return(cast)
+  # apply to training data
+  cast <-  recipes::bake(prep, new_data = NULL) 
 
   # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
@@ -177,8 +170,8 @@ ggpartial.tune_results <- function(
   
   # check for base_map
   if (!isTruthy(base_map) & type == "spatial") {
-    stop(paste0("Provide a basemap as a raster object when selecting,", 
-                "`type` = 'spatial'."), call. = FALSE)
+    stop("Provide a basemap as a raster object when selecting",
+         "`type` = 'spatial'.", call. = FALSE)
   }
   
   # plot y-axis label for the predicted values
@@ -190,7 +183,7 @@ ggpartial.tune_results <- function(
   if (!inherits(trytune, "try-error")) {
     partials_fit <- trytune
     # label will be component name
-    x_lbl <-as_name(x)
+    x_lbl <- as_name(x)
   }
 
   output <- calc_partials(partials_fit, !!x, !!y, exclude)
@@ -474,3 +467,17 @@ ggbase <- function(dat, x, y, id = TRUE) {
   
 }
 
+# untune recipe for easier plotting of feature engineered data
+untune <- function(recipe, tune) {
+  
+  dls <- hardhat::extract_parameter_set_dials(recipe)
+  if (nrow(dls) > 0) {
+    depth_dial <- purrr::map_chr(recipe$steps, list("id")) |> 
+      stringr::str_detect("pca|pls") |> which() # depth of dial
+    name_dial <- dls$name # name of dial
+    # replace tuning parameter with fixed parameter based on `tune`
+    purrr::pluck(recipe, "steps", depth_dial, name_dial) <- tune 
+    recipe
+  }
+  recipe
+}

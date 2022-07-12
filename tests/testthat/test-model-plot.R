@@ -1,11 +1,5 @@
 test_that("partial regressions can be plotted with tuning", {
   
-  # partial map projection
-  # base <- oceanexplorer::get_NOAA("temperature", 1, "annual") |> 
-  #   oceanexplorer::filter_NOAA(depth = 0) |> 
-  #   stars::st_warp(crs = 4326) |> 
-  #   stars::st_downsample(n = 5)
-  
   # resample
   set.seed(1)
   splt <- rsample::initial_split(dinodat, prop = 0.75, strata = "latitude") 
@@ -18,11 +12,6 @@ test_that("partial regressions can be plotted with tuning", {
     dim_reduction = "PCA", 
     model = "gls"
   )
-  
-  # model
-  # mdl <- parsnip::linear_reg() |>
-  #   parsnip::set_engine('lm') |>
-  #   parsnip::set_mode('regression')
 
   # model
   library(multilevelmod)
@@ -53,13 +42,7 @@ test_that("partial regressions can be plotted with tuning", {
     "feature engineering",
     ggpartial(splt, wfl,  out = "t_an", pred = "PC1", tune = 1)
   )
-  
-  # inspect feature engineering (on map)
-  # vdiffr::expect_doppelganger(
-  #   "feature engineering",
-  #   ggpartial(splt, wfl, tune = 1, out = "t_an", type = "spatial", base_map = base)
-  # )
-  # 
+
   # what happens if `pred` is supplied with a tuned recipe?
   expect_error(
     ggpartial(splt, wfl, out = "t_an", pred = "PC1"),
