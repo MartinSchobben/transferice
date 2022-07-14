@@ -394,16 +394,22 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 # modelling
 #------------------------------------------------------------------------------- 
     
-    dat <- reactive({
+    rawdat <- reactive({
+      
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+      
+    })
+
+    # preprocess recipe
+    preprocess <- reactive({
 
       if (input$taxo == "genera") {
         
         # all variables and their roles
-        vars <- role_organizer(dt, pm())
+        vars <- role_organizer(rawdat(), pm())
         
         # taxa
         txa <- vars[names(vars) == "predictor"] |> unname()
@@ -411,11 +417,15 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         # variables not used in transform
         terms <- vars[names(vars) != "predictor"]
         
-        dt <- recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
+        dt <- recipes::recipe(x = rawdat(), vars = vars, roles = names(vars)) |> 
           step_taxo(dplyr::any_of(unname(terms))) |> 
-          recipes::prep(training = dt) |> 
+          recipes::prep(training = rawdat()) |> 
           recipes::bake(NULL) 
-      } 
+        
+      } else {
+        
+        dt <- rawdat()
+      }
       
       # all variables and their roles
       vars <- role_organizer(dt, pm())
@@ -423,12 +433,21 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # taxa
       txa <- vars[names(vars) == "predictor"] |> unname()
       
-      # remove the very rare taxa
-      recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
-        recipes::step_nzv(dplyr::any_of(txa))  |> 
-        recipes::prep(training = dt) |> 
-        recipes::bake(NULL) 
+      # new names taxa
+      new_txa <- paste0("taxa_", seq_along(txa))
       
+      # preprocess recipe
+      recipes::recipe(x = dt, vars = vars, roles = names(vars)) |>
+        # rename taxa
+        recipes::step_rename(!!!rlang::set_names(txa, new_txa)) |> 
+        # remove the very rare taxa
+        recipes::step_nzv(dplyr::any_of(txa))  
+    })
+
+    # data formatted 
+    dat <- reactive({
+      recipes::prep(preprocess(), training = rawdat()) |> 
+        recipes::bake(NULL) 
     })
     
     # re-sample
@@ -646,7 +665,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     output$control <- renderUI({
       
       # species names
-      spec_nms <- species_naming(wfl()) 
+      spec_nms <- species_naming(preprocess()) 
       spec_nms <- rlang::set_names(
         paste0("taxa_", seq_along(spec_nms)), 
         spec_nms

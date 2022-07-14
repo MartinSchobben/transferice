@@ -5,11 +5,19 @@
 \alias{print_model.mc_split}
 \alias{print_model.tune_results}
 \alias{print_model.last_fit}
-\title{Model print}
+\title{print HTML model setup
+Model print}
 \usage{
 print_model(obj, ...)
 
-\method{print_model}{mc_split}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
+\method{print_model}{mc_split}(
+  obj,
+  workflow,
+  pred = NULL,
+  tune = NULL,
+  out = NULL,
+  exclude = c("sample_id", "hole_id", "longitude", "latitude")
+)
 
 \method{print_model}{tune_results}(
   obj,
@@ -18,11 +26,13 @@ print_model(obj, ...)
   tune = NULL,
   out = NULL,
   height = NULL,
-  width = NULL
+  width = NULL,
+  id = character(0)
 )
 
 \method{print_model}{last_fit}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 }
 \description{
+print HTML model setup
 Model print
 }

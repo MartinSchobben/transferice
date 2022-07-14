@@ -83,9 +83,9 @@ transferice_recipe <- function(
   new_txa <- paste0("taxa_", seq_along(txa))
   
   # recipe
-  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |>   
+  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) #|>
     # rename taxa
-    recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
+    # recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
   
   # transforming 
   if (isTruthy(trans)) {

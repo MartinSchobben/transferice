@@ -34,10 +34,6 @@ Care should be taken when using \code{skip = TRUE} as it may affect
 the computations for subsequent operations.}
 
 \item{id}{A character string that is unique to this step to identify it.}
-
-\item{options}{A list of options to the default method for
-\code{\link[tidyr:pivot_longer]{tidyr::pivot_longer()}}. Argument defaults are set to \verb{names_to = "names}
-and \code{values_to = "values"}.}
 }
 \value{
 step

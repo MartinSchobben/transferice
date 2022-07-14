@@ -145,7 +145,7 @@ ggpartial(final, gls_wfl, pred = "taxa_2", out = "t_an", type = "bubble")
 
 ```{r predict, options}
 
-# finalized workflow fitted on all data
+# finalized workflow fitted on all data (this can be adjusted to species present in the fossil assemblage)
 final_fit <- fit(gls_wfl, data = dinodat)
 
 # new recipe

@@ -39,10 +39,9 @@ calc_taxon_prop <- function(
 # species names for selection
 # workflow object
 # id: id to search (if NULL all names are give)
-species_naming <- function(workflow, id = NULL) {
-  
-  nms <- hardhat::extract_preprocessor(workflow) |> 
-    recipes::tidy(1) # or 2 if normalised 
+species_naming <- function(recipe, id = NULL) {
+
+  nms <- recipes::tidy(recipe, 1) # or 2 if normalised 
   
   if (is.null(id)) {
     id <- paste0("taxa_", 1:nrow(nms))
