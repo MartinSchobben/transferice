@@ -15,14 +15,11 @@ role_organizer <- function(
   } 
   
   # roles
-  c(
-    temporal =  temporal,
-    group = group,
-    spatial = spatial[1],
-    spatial = spatial[2],
-    outcome = outcome
-  ) |> 
-    append(setNames(txa, rep("predictor", length(txa))))
+  c(outcome = outcome) |> 
+    append(setNames(txa, rep("predictor", length(txa)))) |> 
+    append(setNames(spatial, rep("spatial", length(spatial)))) |> 
+    append(setNames(group, rep("group", length(group)))) |> 
+    append(setNames(temporal, rep("temporal", length(temporal)))) 
   
 }
 # dat = dataset
@@ -68,24 +65,29 @@ formula_parser <- function(
 transferice_recipe <- function(
     dat,
     outcome,
+    # taxa_depth = "species",
     trans = NULL, 
     dim_reduction = NULL, 
     tunable = TRUE,
     model = "ols"
   ) {
 
-
+  # roles of all variables 
   vars <- role_organizer(dat, outcome)
+  
   # taxa
   txa <- vars[names(vars) == "predictor"]
   
   # new names taxa
   new_txa <- paste0("taxa_", seq_along(txa))
   
+  # variables not used in transform
+  terms <- vars[names(vars) != "predictor"]
+  
   # recipe
-  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) #|>
+  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
     # rename taxa
-    # recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
+    recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
   
   # transforming 
   if (isTruthy(trans)) {

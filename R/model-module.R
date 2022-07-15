@@ -178,7 +178,11 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is based on query use R6 in future
+model_server <- function(id, data_id) { # data id is based on query use R6 in future
+  
+  # checks
+  stopifnot(is.reactive(data_id))
+  
   moduleServer(id, function(input, output, session) {
     
 #-------------------------------------------------------------------------------
@@ -196,21 +200,9 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     
     # selected parameter
     pm <- reactive({
-      pm <- strsplit(data_id, "_")[[1]][2]
-      av <- strsplit(data_id, "_")[[1]][3]
+      pm <- strsplit(data_id(), "_")[[1]][3]
+      av <- strsplit(data_id(), "_")[[1]][4]
       paste(pm, av, sep = "_")
-    })
-    
-    # base map (for kriging interpolation)
-    base <- reactive({
- 
-      # parameter
-      pm <- parms[abbreviate_vars(parms) == strsplit(data_id, "_")[[1]][2]]
-      # base map (later on replace this)
-      oceanexplorer::get_NOAA(pm, 1, "annual") |>
-        oceanexplorer::filter_NOAA(depth = 0) |>
-        stars::st_warp(crs = 4326) |>
-        stars::st_downsample(n = 5)
     })
     
     # enable disable tabs based on whether run model has been clicked or 
@@ -394,61 +386,46 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 # modelling
 #------------------------------------------------------------------------------- 
     
-    rawdat <- reactive({
+    dat <- reactive({
       
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
-      nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", data_id(), ext = "rds")) 
       
-    })
-
-    # preprocess recipe
-    preprocess <- reactive({
-
       if (input$taxo == "genera") {
-        
+
         # all variables and their roles
-        vars <- role_organizer(rawdat(), pm())
-        
+        vars <- role_organizer(dt, pm())
+
         # taxa
         txa <- vars[names(vars) == "predictor"] |> unname()
-        
+
         # variables not used in transform
         terms <- vars[names(vars) != "predictor"]
-        
-        dt <- recipes::recipe(x = rawdat(), vars = vars, roles = names(vars)) |> 
-          step_taxo(dplyr::any_of(unname(terms))) |> 
-          recipes::prep(training = rawdat()) |> 
-          recipes::bake(NULL) 
-        
-      } else {
-        
-        dt <- rawdat()
-      }
-      
+
+        dt <- recipes::recipe(x = dt, vars = vars, roles = names(vars)) |>
+          step_taxo(dplyr::any_of(unname(terms))) |>
+          recipes::prep(training = dt) |>
+          recipes::bake(NULL)
+
+      } 
+
       # all variables and their roles
       vars <- role_organizer(dt, pm())
-      
+
       # taxa
       txa <- vars[names(vars) == "predictor"] |> unname()
-      
-      # new names taxa
-      new_txa <- paste0("taxa_", seq_along(txa))
-      
+
       # preprocess recipe
       recipes::recipe(x = dt, vars = vars, roles = names(vars)) |>
-        # rename taxa
-        recipes::step_rename(!!!rlang::set_names(txa, new_txa)) |> 
         # remove the very rare taxa
-        recipes::step_nzv(dplyr::any_of(txa))  
+        recipes::step_nzv(dplyr::any_of(txa)) |> 
+        # prep the data
+        recipes::prep(train = dt) |> 
+        recipes::bake(NULL)
+      
     })
 
-    # data formatted 
-    dat <- reactive({
-      recipes::prep(preprocess(), training = rawdat()) |> 
-        recipes::bake(NULL) 
-    })
     
     # re-sample
     splt <- reactive({
@@ -524,8 +501,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       on.exit(waiter$hide())
       
       # name for caching
-      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
-      nm <- file_namer("rds", "training", data_id, trans = wfl_nm) # file name
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      nm <- file_namer("rds", "training", data_id(), taxa = input$taxo, trans = wfl_nm) # file name
       
       # tuning
       set.seed(2)
@@ -533,22 +510,25 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         app_caching("rds", nm) # caching
     })
     
-    # finalize model (with or without tuning)
-    final <- eventReactive({input$run | input$ncomp}, { 
-      
+    # model workflow name
+    model_id <- eventReactive(input$run, {
       # name for caching
-      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
       # add tune element
       if (isTruthy(input$ncomp)) {
         wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
       }
-      
-      # browser()
       # file name
-      nm <- file_namer("rds", "validation", data_id, trans = wfl_nm)
+      file_namer("rds", "validation", data_id(), taxa = input$taxo, trans = wfl_nm)
+    })
+    
+    observe(message(glue::glue("{model_id()}")))
+    
+    # finalize model (with or without tuning)
+    final <- eventReactive({input$run | input$ncomp}, { 
       
       transferice_finalize(splt(), wfl(), input$ncomp) |> 
-        app_caching("rds", nm) # caching
+        app_caching("rds", model_id()) # caching
     })
 
 #-------------------------------------------------------------------------------
@@ -562,12 +542,15 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       if (input$specs == "engineering") {
         dat <- splt()
         type <- "png" # output type of file
+        method <- "prop"
       } else if (input$specs == "training") {
         dat <- tun()
         type <- "mkv" # output type of file
+        method <- "partial_fit"
       } else if (input$specs == "validation") {
         dat <- final()
         type <- "png" # output type of file
+        method <- "global_fit"
       }
       
       # fitted data requires a species name variable selection
@@ -587,23 +570,29 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       }
       
       # workflow    
-      wfl_label <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_")
+      wfl_label <- sanitize_workflow(wfl())
       
       # file name
-      file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
-                              viz = viz, x = x)
+      file_name <- file_namer(type, input$specs, data_id(), 
+                              taxa = input$taxo, method = method,
+                              trans = wfl_label, viz = viz, x = x)
+      # file name
+      data_name <- file_namer("rds", input$specs, data_id(),
+                              taxa = input$taxo, method = method, 
+                              trans = wfl_label)
+      
       width <- height <- file$height
    
       # output
       list(dat = dat, viz = viz, type = type, file_name = file_name, 
-           width = width, height = height) 
+           data_name = data_name, width = width, height = height) 
     })
     
     # create plot or animation (save in `reactiveValues`)
     observe({
 
       req(file_info())
-      
+
       # predictor
       if (isTruthy(input$dims)) {
         req(input$comp)
@@ -621,7 +610,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         tune = input$ncomp,
         type = file_info()$viz,
         base_map = NULL, #base(),
-        id = data_id
+        id = file_info()$data_name
       ) |>
         # caching of file
         app_caching(file_info()$type, file_info()$file_name, file_info()$width,
@@ -665,7 +654,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     output$control <- renderUI({
       
       # species names
-      spec_nms <- species_naming(preprocess()) 
+      spec_nms <- taxa_naming(wfl()) 
       spec_nms <- rlang::set_names(
         paste0("taxa_", seq_along(spec_nms)), 
         spec_nms
@@ -765,13 +754,16 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
         out = pm(),
         width = 250,
         height = 250,
-        id = data_id
+        id = data_id()
       )
     }) |> 
       bindEvent(tun())
 
     # final model metric as text in side panel
     output$finmetrics <- renderUI({print_model(final())})
+    
+    # return model workflow
+    model_id
   })
 }
 

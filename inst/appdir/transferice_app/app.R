@@ -10,7 +10,7 @@ titlepage <- fixedPage(
 )
 
 # different wizard panels
-tabs <- tagList(titlepage, explo_ui("explo"), model_ui("model"))
+tabs <- tagList(titlepage, explo_ui("explo"), model_ui("model"), predict_ui("predict"))
 pool <- get_pool()
 
 ui <- fluidPage(
@@ -26,9 +26,12 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   thematic::thematic_shiny(bg = "transparent", fg = "black")
-  wizard_server("wizard", 3)
-  explo_server("explo")
-  model_server("model")
+  wizard_server("wizard", 4)
+  data_id <- explo_server("explo")
+  observe(message(glue::glue("{data_id()}")))
+  model_id <- model_server("model", data_id)
+  predict_server("predict", model_id)
+  observe(message(glue::glue("{model_id()}")))
 }
 
 shinyApp(ui, server)

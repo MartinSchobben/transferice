@@ -39,9 +39,15 @@ calc_taxon_prop <- function(
 # species names for selection
 # workflow object
 # id: id to search (if NULL all names are give)
-species_naming <- function(recipe, id = NULL) {
-
-  nms <- recipes::tidy(recipe, 1) # or 2 if normalised 
+taxa_naming <- function(workflow, id = NULL) {
+  
+  rcp <- hardhat::extract_preprocessor(workflow)  
+  # which is the rename step?
+  n_step <- recipes::tidy(rcp) |> 
+    dplyr::filter(type == "rename") |> 
+    dplyr::pull(number)
+  # select rename step
+  nms <- recipes::tidy(rcp, n_step) 
   
   if (is.null(id)) {
     id <- paste0("taxa_", 1:nrow(nms))
@@ -174,7 +180,7 @@ clean_cache <- function(module = "training", type = "all") {
   if (module == "training") {
     if (type == "all" || type == "data") {
     files_train <- list.files(cache_pkg) 
-      list.files(cache_pkg, full.names = TRUE)[grepl("^training", files_train)] |> 
+      list.files(cache_pkg, full.names = TRUE)[grepl("^raw|^training|^validation", files_train)] |> 
         fs::file_delete()
     }
     if (type == "all" || type == "img") {

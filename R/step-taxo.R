@@ -81,7 +81,7 @@ prep.step_taxo <- function(x, training, info = NULL, ...) {
 #' @importFrom recipes bake
 #' @export
 bake.step_taxo <- function(object, new_data, ...) {
-  tidyr::pivot_longer(dinodat, !dplyr::all_of(object$terms)) |> 
+  tidyr::pivot_longer(new_data, !dplyr::all_of(object$terms)) |> 
     tidyr::separate(name, into = c("genera", "species"), extra = "merge", 
                     fill = "right") |> 
     dplyr::group_by(!!!rlang::syms(c(object$terms, "genera"))) |> 

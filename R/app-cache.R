@@ -77,15 +77,47 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
 
 
 # introduce filenaming convention
-file_namer <- function(type, prefix, taxa, method = "count", trans = "unprocessed", 
+file_namer <- function(type, prefix, tag, taxa = "species", method = "prop", trans = NULL, 
                        viz = NULL, x = NULL) {
   
-  stopifnot(prefix %in% c("raw", "engineering", "training", "validation"))
-  if (type != "rds") stopifnot(viz %in% c("spatial", "xy", "bubble", "boxplot", "histogram"))
+  types <- c("raw", "engineering", "training", "validation")
+  plots <- c("spatial", "xy", "bubble", "boxplot", "histogram")
+  taxas <- c("species", "genera")
+  methods <- c("prop", "partial_fit", "global_fit")
+  
+  # for all
+  stopifnot(prefix %in% types)
+  stopifnot(method %in% methods)
+  stopifnot(taxa %in% taxas)
+  
+  # for plots
+  if (type != "rds") stopifnot(viz %in% plots)
   if (type != "rds") stopifnot(all(!is.null(viz), !is.null(x)))
   
-  # core names
-  nm <- paste(prefix, taxa, method, trans, sep = "_")
+  # prefixs
+  if (stringr::str_detect(tag, paste(types, collapse = "|"))) {
+    nm <- stringr::str_replace(tag, paste(types, collapse = "|"), prefix)
+  } else {
+    nm <- paste(prefix, tag, sep = "_")
+  }
+
+  # taxaonomic depth
+  if (stringr::str_detect(nm, paste(taxas, collapse = "|"))) {
+    nm <- stringr::str_replace(nm, paste(taxas, collapse = "|"), taxa)
+  } else {
+    nm <- paste(nm, taxa, sep = "_")
+  }
+  
+  # methods
+  if (stringr::str_detect(nm, paste(methods, collapse = "|"))) {
+    nm <- stringr::str_replace(nm, paste(methods, collapse = "|"), method)
+  } else {
+    nm <- paste(nm, method, sep = "_")
+  }
+  
+  if (!is.null(trans)) { 
+    nm <- paste(nm, trans, sep = "_")
+  }
   
   # extend if needed
   if (type != "rds") {

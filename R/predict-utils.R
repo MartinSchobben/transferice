@@ -1,5 +1,11 @@
 # impute missing taxa in the fossil dataset
-impute_taxa <- function(obj, new_data, out, return_type = "percent") {
+impute_taxa <- function(
+    obj, 
+    new_data, 
+    out, 
+    return_type = "percent", 
+    exclude = c("hole_id", "sample_id", "longitude", "latitude", "depth")
+  ) {
   
   # datasets
   train <- obj$splits[[1]] |> tibble::as_tibble()
@@ -22,10 +28,34 @@ impute_taxa <- function(obj, new_data, out, return_type = "percent") {
     zero_vc <- rlang::rep_named(train_nm[names(train_nm) == "predictor" ][!lgl_new], 0)
     
     # select taxa that exist in training set
-    dplyr::select(new_data, dplyr::any_of(train_nm[names(train_nm) == "predictor"])) |> 
+    dplyr::select(
+      new_data, 
+      dplyr::any_of(c(exclude, unname(train_nm[names(train_nm) == "predictor"])))
+    ) |> 
       # impute those that do not exist in training set
       tibble::add_column(!!!zero_vc)
   
   }
 }
+
+
+age_finder <- function(depth) {
+  
+  # connection
+  nsb <- NSBcompanion::nsbConnect("guest", "arm_aber_sexy")
+  
+  # add age
+  connect_age(depth, nsb)
+  
+}
+
+
+connect_age <- function(data, conn) {
+  # unique event name
+  id <- dplyr::pull(data, hole_id) |> unique()
+  dplyr::mutate(
+    data, 
+    age_ma = NSBcompanion::findAge(conn, id, depth_mbsf = depth)$age_ma)
+}
+
 

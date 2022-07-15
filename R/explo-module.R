@@ -16,12 +16,12 @@ explo_ui <- function(id) {
       column(
         width = 3,
         wellPanel(        
-          h3("Site selection"),
           selectInput(NS(id, "area"), "Region", choices = area),
           selectInput(NS(id, "parm"), "Parameter", choices = abbreviate_vars(parms)),
           sliderInput(NS(id, "depth"), "Waterdepth", min = 0, max = 3500, value = 0),
           selectInput(NS(id, "temp"), "Averaging", choices = temp),
-          selectInput(NS(id, "group"), "Taxa", choices = "dinocyst")
+          selectInput(NS(id, "group"), "Taxa", choices = "dinocyst"),
+          style = "height:100%;"
         )
       ),
       
@@ -62,7 +62,8 @@ explo_ui <- function(id) {
               "appearance",
               imageOutput(NS(id, "exm"))
             )
-          )
+          ),
+          style = "height:100%;"
         )
       )
     )
@@ -200,11 +201,23 @@ explo_server <- function(id) {
 
       selectInput(
         NS(id, "taxa"), 
-        "Taxa selection",
+        "Taxa abundance",
         choices =  colnames(tx)
       )
     })
     
+    nm <- reactive({
+      # unique name
+      id <- paste(
+        input$group,
+        input$parm,
+        input$temp, 
+        names(area)[area == input$area], 
+        paste0(input$depth, "mbsf"),
+        sep = "_"
+      )
+      file_namer("rds", "raw", id)
+    })
     # combine taxon and environmental data, and export (later this should 
     # become a reactive for export)
     observe({
@@ -216,21 +229,14 @@ explo_server <- function(id) {
         by = c("sample_id", "hole_id")
       ) |> 
         tidyr::drop_na()
-
-      # unique name
-      id <- paste(
-        input$group,
-        input$parm,
-        input$temp, 
-        names(area)[area == input$area], 
-        sep = "_"
-      )
-      nm <- file_namer("rds", "raw", id, trans = "prop")
       
       # export
       pt_pkg <- fs::path_package("transferice", "appdir", "cache")
-      saveRDS(out, fs::path(pt_pkg, nm, ext = "rds"))
+      saveRDS(out, fs::path(pt_pkg, nm(), ext = "rds"))
     })
+    
+    # return
+    nm
   })
 }
 

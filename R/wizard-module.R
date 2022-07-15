@@ -62,7 +62,7 @@ tab_creator <- function(id, tabs) {
         width = 12, 
         tags$hr(),
         fixedPanel(
-          style = paste0("background-color:", grDevices::grey(0.8), ";"), 
+          style = paste0("background-color:", grDevices::grey(0.8), ";opacity: 0.5;"), 
           bottom = 0, 
           left = 0, 
           right = 0,

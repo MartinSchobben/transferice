@@ -53,7 +53,7 @@ ggpartial.mc_split <- function(
   if (grepl("PC", as_name(x))) {
     x_lbl <- as_name(x)
   } else {
-    x_lbl <- species_naming(workflow, as_name(x))
+    x_lbl <- taxa_naming(workflow, as_name(x))
   }
   
   # fallback for no supplied tune with a tuned recipe
@@ -71,47 +71,7 @@ ggpartial.mc_split <- function(
     x_lbl <- paste0("transform(", x_lbl, ")")
   } 
     
-  if (type == "spatial") {
-    
-    # get coordinates and turn into sf object
-    spat <- tibble::as_tibble(obj) |> 
-      dplyr::select(.data$longitude, .data$latitude)
-    cast <- dplyr::bind_cols(spat, cast) |> 
-      sf::st_as_sf(
-        coords = c("longitude", "latitude"), 
-        crs = sf::st_crs(base_map)
-      ) 
-    
-    # plot
-    p <- oceanexplorer::plot_NOAA(
-      base_map,
-      rng = range(base_map[[1]], na.rm = TRUE)
-    ) + 
-      ggplot2::geom_sf(
-        data= cast,
-        # discretise abundance data
-        mapping = ggplot2::aes(
-          color =
-            ggplot2::cut_interval(
-              .data[[!!x]],
-              3,
-              labels = c("low", "mid", "high")
-            )
-          )
-      ) +
-      ggplot2::scale_color_manual(
-        as_name(x),
-        values = c("#fff7bc", "#fec44f", "#d95f0e"),
-        guide = ggplot2::guide_legend(title.position = "top")
-      ) + 
-      ggplot2::coord_sf(
-        xlim = c(-180, 180),
-        ylim = c(-90, 90),
-        default_crs = sf::st_crs(base_map),
-        crs = sf::st_crs(base_map),
-        expand = FALSE
-    )
-  } else if (type == "xy") {
+  if (type == "xy") {
 
     # plot
     p <- ggbase(cast, x, y, id = FALSE)  + 
@@ -150,13 +110,11 @@ ggpartial.tune_results <- function(
   } else {
     
     # memoised partials function
-    nm_fit <- file_namer("rds", "training", id, "partial_fit", 
-                         trans = sanitize_workflow(workflow))
     partials_fit <- cv_extraction(obj) |> 
-      app_caching("rds", nm_fit) # caching
+      app_caching("rds", id) # caching
     
     # exclude from predicted values
-    if(stringr::str_detect(nm_fit, "gls")) {
+    if(stringr::str_detect(id, "gls")) {
       exclude <- syms(c("longitude", "latitude"))
     }
     
@@ -176,7 +134,7 @@ ggpartial.tune_results <- function(
   
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  x_lbl <- species_naming(workflow, as_name(x))
+  x_lbl <- taxa_naming(workflow, as_name(x))
   
   # check if tuned then subset num_comp (filter only what's needed)
   trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
@@ -304,7 +262,7 @@ ggpartial.last_fit <- function(
     
     # label
     y_lbl <- oceanexplorer::env_parm_labeller(out, prefix = "Delta")
-    x_lbl <- species_naming(workflow, as_name(x))
+    x_lbl <- taxa_naming(workflow, as_name(x))
     
     # plot 
     p <- oceanexplorer::plot_NOAA(z) +

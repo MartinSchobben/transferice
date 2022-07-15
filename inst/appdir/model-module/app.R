@@ -10,7 +10,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   thematic::thematic_shiny(bg = "transparent", fg = "black")
-  model_server("model")
+  model_server("model", reactive("raw_dinocyst_t_an_global_0mbsf_species_prop"))
 }
 
 shinyApp(ui, server)

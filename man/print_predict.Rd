@@ -2,13 +2,10 @@
 % Please edit documentation in R/predict-print.R
 \name{print_predict}
 \alias{print_predict}
-\alias{print_predict.last_fit}
 \title{print HTML model setup
 Model print}
 \usage{
-print_predict(obj, new_data, ...)
-
-\method{print_predict}{last_fit}(obj, new_data, out, ...)
+print_predict(obj, new_data, out, ...)
 }
 \description{
 print HTML model setup

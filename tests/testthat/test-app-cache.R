@@ -1,10 +1,11 @@
 test_that("file naming conventions work", {
   # snaps
   expect_snapshot(
-    file_namer("rds", "raw", "dinocyst")
+    file_namer("rds", "raw", "dinocyst_t_an_global")
   )
   expect_snapshot(
-    file_namer("rds", "prep", "dinocyst", trans = "lm")
+    file_namer("rds", "engineering", "raw_dinocyst_t_an_global_prop_species", 
+               taxa ="genera", method = "partial_fit", trans = "lm")
   )
   
   # errors
