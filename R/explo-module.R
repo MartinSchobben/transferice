@@ -7,20 +7,60 @@
 #' @export
 explo_ui <- function(id) {
   
+  # namespace
+  ns <- NS(id)
+  
   tagList(
     # Application title
-    titlePanel("Modern species distribution"),
+    titlePanel("Modern Species Distribution"),
     
     # Sidebar with global selection
     fluidRow(
       column(
         width = 3,
-        wellPanel(        
-          selectInput(NS(id, "area"), "Region", choices = area),
-          selectInput(NS(id, "parm"), "Parameter", choices = abbreviate_vars(parms)),
-          sliderInput(NS(id, "depth"), "Waterdepth", min = 0, max = 3500, value = 0),
-          selectInput(NS(id, "temp"), "Averaging", choices = temp),
-          selectInput(NS(id, "group"), "Taxa", choices = "dinocyst"),
+        wellPanel(
+          tabsetPanel(
+            id = ns("select"),
+            tabPanel(
+              "biota",
+              br(),
+              actionLink(
+                ns("grouphelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
+              selectInput(
+                ns("group"), 
+                "Taxa", 
+                choices = "dinocyst"
+              )
+            ),
+            tabPanel(
+              "environment",
+              selectInput(
+                ns("area"), 
+                "Region", 
+                choices = area
+              ),
+              selectInput(
+                ns("parm"), 
+                "Parameter", 
+                choices = abbreviate_vars(parms)
+              ),
+              sliderInput(
+                ns("depth"), 
+                "Waterdepth", 
+                min = 0, 
+                max = 3500, 
+                value = 0
+              ),
+              selectInput(
+                ns("temp"), 
+                "Averaging", 
+                choices = temp
+              )
+            )
+          ),
           style = "height:100%;"
         )
       ),
@@ -30,18 +70,18 @@ explo_ui <- function(id) {
         width = 6, 
         tabsetPanel(
           id ="explore",
-          tabPanel("worldmap", plotOutput(NS(id, "wmap"))),
+          tabPanel("worldmap", plotOutput(ns("wmap"))),
           tabPanel(
             "site comparison", 
-            div(plotOutput(NS(id, "pcr")), style = "text-align: center;"),
+            div(plotOutput(ns("pcr")), style = "text-align: center;"),
             fluidRow(
               column(
                 width = 4,
-                selectInput(NS(id, "x"), "x-axis", choices = paste0("PC", 1:5))
+                selectInput(ns("x"), "x-axis", choices = paste0("PC", 1:5))
               ),
               column(
                 width = 4,
-                selectInput(NS(id, "y"), "y-axis", choices = paste0("PC", 1:5))
+                selectInput(ns("y"), "y-axis", choices = paste0("PC", 1:5))
               )
             )
           )
@@ -52,15 +92,15 @@ explo_ui <- function(id) {
         width = 3,
         wellPanel(
           tabsetPanel(
-            id = NS(id, "results"),
-            header = tagList(tags$br(), uiOutput(NS(id, "control")), tags$br()),
+            id = ns("results"),
+            header = tagList(tags$br(), uiOutput(ns("control")), tags$br()),
             tabPanel(
               "abundance",
-              div(plotOutput(NS(id, "spc")), style = "text-align: center;")
+              div(plotOutput(ns("spc")), style = "text-align: center;")
               ),
             tabPanel(
               "appearance",
-              imageOutput(NS(id, "exm"))
+              imageOutput(ns("exm"))
             )
           ),
           style = "height:100%;"
@@ -81,12 +121,12 @@ explo_server <- function(id) {
       # connection and query
       locs <- DBI::dbGetQuery(
         pool, 
-        "SELECT l.hole_id, site, longitude, latitude, sample_id 
+        "SELECT l.hole_id, site_hole, longitude, latitude, sample_id 
           FROM neptune_hole_summary l 
             LEFT JOIN neptune_sample s ON l.hole_id = s.hole_id"
         )
       # remove redundant information (site name)
-      locs <- dplyr::select(locs, -site)
+      locs <- dplyr::select(locs, -site_hole)
       # filter latitudes for area selection
       lat_ft <- rep(TRUE, nrow(locs))
       if (input$area == "3031") lat_ft <- locs$latitude <= 0

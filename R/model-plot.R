@@ -34,7 +34,6 @@ ggpartial.mc_split <- function(
     pred = NULL,
     tune = NULL, 
     type = "xy",
-    base_map = NULL,
     return_type =  "plot",
     id
   ) {
@@ -50,12 +49,8 @@ ggpartial.mc_split <- function(
   
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  if (grepl("PC", as_name(x))) {
-    x_lbl <- as_name(x)
-  } else {
-    x_lbl <- taxa_naming(workflow, as_name(x))
-  }
-  
+  x_lbl <- x_labeller(workflow, x)
+
   # fallback for no supplied tune with a tuned recipe
   recipe <- untune(recipe, tune)
 
@@ -66,10 +61,6 @@ ggpartial.mc_split <- function(
 
   # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
-  
-  if (all(!isTruthy(pred), !isTruthy(recipe_specs))) {
-    x_lbl <- paste0("transform(", x_lbl, ")")
-  } 
     
   if (type == "xy") {
 
@@ -92,12 +83,11 @@ ggpartial.tune_results <- function(
     pred = NULL,
     tune = NULL, 
     type = "xy", 
-    base_map = NULL, 
     plot_type =  "dynamic",
     id = NULL,
     mc_cores = 2
   ) {
-  
+
   # exclude from predicted values
   exclude <- NULL
   
@@ -126,15 +116,9 @@ ggpartial.tune_results <- function(
   # outcome variable
   y <- out 
   
-  # check for base_map
-  if (!isTruthy(base_map) & type == "spatial") {
-    stop("Provide a basemap as a raster object when selecting",
-         "`type` = 'spatial'.", call. = FALSE)
-  }
-  
   # plot y-axis label for the predicted values
   y_lbl <- oceanexplorer::env_parm_labeller(gsub("_.*$", "", y))
-  x_lbl <- taxa_naming(workflow, as_name(x))
+  x_lbl <- x_labeller(workflow, x)
   
   # check if tuned then subset num_comp (filter only what's needed)
   trytune <- try(dplyr::filter(partials_fit, .data$num_comp == tune), silent = TRUE)
@@ -147,32 +131,7 @@ ggpartial.tune_results <- function(
   output <- calc_partials(partials_fit, !!x, !!y, exclude)
   
   # determine type of statistics and build plot base
-  if (type == "spatial") {
-    
-    # original data
-    origin <- dplyr::transmute(
-      partials_fit, 
-      origin = purrr::map(splits, tibble::as_tibble)
-    ) 
-
-    # spatial interpolation for each fold
-    # make parallel
-    z <- parallel::mcMap(
-      interpolate_model, 
-      origin = origin$origin, 
-      output = output$.output, 
-      MoreArgs = list(y = y, base_map = base_map),
-      mc.cores = mc_cores 
-    )
-
-    st <- rlang::inject(c(!!!z, nms = output$id)) # combine and rename
-    st = merge(st) # collapse to dimension
-    names(st) = rlang::as_name(y) # rename
-      
-    # plot
-    p <- oceanexplorer::plot_NOAA(st, rng = range(st[[1]], na.rm = TRUE)) 
-
-  } else if (type == "xy") {
+  if (type == "xy") {
   
     # prepare data
     comb <- tidyr::unnest(output, cols = c(.data$.input, .data$.output))
@@ -190,12 +149,7 @@ ggpartial.tune_results <- function(
 
   if (plot_type  == "dynamic") {
   
-    if (type == "spatial") {
-      
-      p <- p + gganimate::transition_states(attributes) +
-        ggplot2::labs(title = 'Predicted values ({closest_state})')
-      
-    } else  if (type == "xy") {
+   if (type == "xy") {
       
       p <- p + gganimate::transition_states(.data$id) + 
         ggplot2::labs(
@@ -221,11 +175,9 @@ ggpartial.last_fit <- function(
     pred = NULL, 
     tune = NULL, 
     type = "xy",
-    base_map = NULL,
     id
 ) {
   
-
   # extract averaging
   averaging <- gsub("^(.)*_", "", out)
 
@@ -243,33 +195,7 @@ ggpartial.last_fit <- function(
   preds <- tune::collect_predictions(obj) |> 
     dplyr::bind_cols(test)
   
-  if (type == "spatial") {
-    
-    # original data
-    origin <- dplyr::transmute(
-      obj, 
-      origin = purrr::map(splits, rsample::testing)
-    ) |> 
-      tidyr::unnest(cols = c(origin))
-    # predictions
-    output <- dplyr::select(preds, - dplyr::any_of(dplyr::any_of(pms)))
-    # interpolate
-    z <- interpolate_model(origin, output, !! rlang::sym(out), base_map)
-      
-    # difference on raster (predicted - truth)
-    z <- z - base_map
-    names(z) = out # rename
-    
-    # label
-    y_lbl <- oceanexplorer::env_parm_labeller(out, prefix = "Delta")
-    x_lbl <- taxa_naming(workflow, as_name(x))
-    
-    # plot 
-    p <- oceanexplorer::plot_NOAA(z) +
-      ggplot2::scale_fill_gradient2(y_lbl) +
-      ggplot2::labs(title = ttl_spat, x = x_lbl)
-      
-  } else if (type == "xy") {
+  if (type == "xy") {
     # title
     ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
       
@@ -319,8 +245,8 @@ ggpartial.last_fit <- function(
       ggplot2::guides(fill = ggplot2::guide_legend(), size = ggplot2::guide_legend()) 
   }
   
-    # add theme
-    p + transferice_theme() 
+  # add theme
+  p + transferice_theme() 
     
 }
 
@@ -438,4 +364,12 @@ untune <- function(recipe, tune) {
     recipe
   }
   recipe
+}
+
+x_labeller <- function(workflow, x) {
+  if (grepl("PC", as_name(x))) {
+    as_name(x)
+  } else {
+    taxa_naming(workflow, as_name(x))
+  }
 }

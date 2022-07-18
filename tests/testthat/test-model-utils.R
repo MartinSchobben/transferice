@@ -5,7 +5,7 @@ test_that("transferice workflows and model tuning works", {
   splt <- rsample::initial_split(dinodat, prop = 0.75) 
   
   # recipes
-  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "pca")
   
   # model
   mdl <- parsnip::linear_reg() |>
@@ -22,7 +22,7 @@ test_that("transferice workflows and model tuning works", {
   tuned_cv <- transferice_tuning(splt, wfl)
   
   # recipes
-  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "PCA", model = "gls")
+  rcp <- transferice_recipe(dinodat, "t_an", trans = "logit", dim_reduction = "pca", model = "gls")
   
   # model
   gls_spec <- parsnip::linear_reg() |> 

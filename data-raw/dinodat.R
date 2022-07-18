@@ -11,7 +11,7 @@ dino_prop <- calc_taxon_prop(con)
 # environment
 locs <- DBI::dbGetQuery(
   con, 
-  "SELECT l.hole_id, site, longitude, latitude, sample_id 
+  "SELECT l.hole_id, site_hole, longitude, latitude, sample_id 
     FROM neptune_hole_summary l 
       LEFT JOIN neptune_sample s ON l.hole_id = s.hole_id"
 )
@@ -28,7 +28,7 @@ usethis::use_data(parms, overwrite = TRUE)
 # get NOAA annually averaged data for parameters on a 1 degree grid 
 dt  <- oceanexplorer::get_NOAA("temperature", 1, "annual")
 
-crd <- locs[, !names(locs) %in%  c("hole_id", "site", "sample_id"), drop = FALSE]
+crd <- locs[, !names(locs) %in%  c("hole_id", "site_hole", "sample_id"), drop = FALSE]
 # cast location as list before extraction
 pts <- setNames(as.list(crd), nm = c("lon", "lat"))
 
@@ -39,7 +39,7 @@ parms <- oceanexplorer::filter_NOAA(dt, depth = 30,  coord = pts) |>
 
 # location informaiton
 environ_dat <- dplyr::bind_cols(locs, parms) |> 
-  dplyr::select(-c(.data$site))
+  dplyr::select(-c(.data$site_hole))
 
 # save data
 usethis::use_data(environ_dat , overwrite = TRUE)
@@ -54,10 +54,8 @@ dinodat <- dplyr::left_join(
   by = c("hole_id", "sample_id")
 ) |> 
   # remove NAs
-  tidyr::drop_na() |> 
-  # sample poriton
-  dplyr::slice_sample(n = 600)
-  
+  tidyr::drop_na() 
+
 # save data
 usethis::use_data(dinodat, overwrite = TRUE)
 

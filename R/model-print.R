@@ -40,10 +40,10 @@ print_model.mc_split <- function(
   
   # operations
   ops <- gsub("_", " ", sanitize_workflow(workflow, model = F))
-  ops <- paste("<b>operations</b>: ", ops, collapse = "")
+  ops <- paste("<b>operations</b>: <br/> <br/> ", ops, collapse = "")
   
   # model component
-  mdl <-paste("<b>model</b>: $Y = \\beta_{0} + \\beta_{1} X + \\epsilon$", 
+  mdl <-paste("<b>model</b>: <br/> <br/> $Y = \\beta_{0} + \\beta_{1} X + \\epsilon$", 
               sep = "<br/> <br/>")
   
   # print with mathjax
@@ -138,7 +138,7 @@ print_model.last_fit  <- function(
   # c <- print_metric(mts, "rmsre")
   # all <- paste(a, b, c, sep = "<br/><br/>")
   # print with mathjax
-  withMathJax(HTML(paste0("<b>model fit metrics</b>: <br/> <br/>", b)))
+  withMathJax(HTML(paste0("<br/> <br/> <b>model fit metrics</b>: <br/> <br/>", b)))
   
 }
 

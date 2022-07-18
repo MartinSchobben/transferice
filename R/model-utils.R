@@ -1,8 +1,8 @@
 role_organizer <- function(
     dat, 
     outcome, 
-    group = "hole_id", 
-    temporal = "sample_id", 
+    group = c("sample_id", "hole_id"), 
+    temporal = c("sample_depth_mbsf"), 
     spatial = c("longitude", "latitude"),
     aliases = NULL
   ) {
@@ -65,18 +65,17 @@ formula_parser <- function(
 transferice_recipe <- function(
     dat,
     outcome,
-    # taxa_depth = "species",
     trans = NULL, 
     dim_reduction = NULL, 
-    tunable = TRUE,
-    model = "ols"
+    component = NULL,
+    model = "lm"
   ) {
 
   # roles of all variables 
   vars <- role_organizer(dat, outcome)
   
   # taxa
-  txa <- vars[names(vars) == "predictor"]
+  txa <- vars[names(vars) == "predictor"] |> unname()
   
   # new names taxa
   new_txa <- paste0("taxa_", seq_along(txa))
@@ -85,35 +84,39 @@ transferice_recipe <- function(
   terms <- vars[names(vars) != "predictor"]
   
   # recipe
-  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) |> 
-    # rename taxa
-    recipes::step_rename(!!!rlang::set_names(txa, new_txa)) 
+  rcp <- recipes::recipe(x = dat, vars = vars, roles = names(vars)) 
   
   # transforming 
   if (isTruthy(trans)) {
-    rcp <- purrr::reduce(trans, transform_predictor, .init = rcp, txa = new_txa)
+    rcp <- purrr::reduce(trans, transform_predictor, .init = rcp, txa = txa)
   }
   
   # dimensions reduction (PCA)
-  if (isTruthy(dim_reduction) && dim_reduction == "PCA") {
-    if (isTRUE(tunable)) {
+  if (isTruthy(dim_reduction) && dim_reduction == "pca") {
+    if (is.null(component)) {
       rcp <- recipes::step_pca(
         rcp,
-        dplyr::any_of(new_txa), 
+        dplyr::any_of(txa), 
         num_comp = tune::tune()
       )
     } else {
       rcp <- recipes::step_pca(
         rcp,
-        dplyr::any_of(new_txa)
+        dplyr::any_of(txa),
+        num_comp = component
       )
     }
+  } else {
+    # rename taxa (in case of no PCA)
+    rcp <- recipes::step_rename(rcp, !!!rlang::set_names(txa, new_txa)) 
   }
   
   #in case of spatial component with GLS add
   if (model == "gls") {
-    rcp <- step_zerogeodist(rcp, lon = longitude, lat = latitude, skip = TRUE) |> 
-      recipes::update_role(longitude, latitude, new_role = "predictor")
+    if (!is.null(outcome)) {
+      rcp <- step_zerogeodist(rcp, lon = longitude, lat = latitude, skip = TRUE)
+    }
+    rcp <- recipes::update_role(rcp, longitude, latitude, new_role = "predictor")
   }
   
   # make everything predictors
@@ -193,7 +196,8 @@ transform_predictor <- function(rcp, trans, txa) {
 
 # remove near zero variance before normalizing
 step_nz_normalize <- function(rcp, txa) {
-  recipes::step_normalize(rcp, dplyr::any_of(txa))
+  recipes::step_nzv(rcp, dplyr::any_of(txa)) |> 
+    recipes::step_normalize(dplyr::any_of(txa))
 }
 
 step_logit_center <- function(rcp, txa) {

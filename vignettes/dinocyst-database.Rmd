@@ -124,10 +124,10 @@ DBI::dbWriteTable(con, "neptune_sample_taxa", dino_cnt, overwrite = TRUE)
 
 ```{r locations}
 # extract geographic information
-dino_loc <- dplyr::select(dino_all, site = .data$station, .data$longitude, 
+dino_loc <- dplyr::select(dino_all, site_hole = .data$station, .data$longitude, 
                           .data$latitude) |> 
-  dplyr::distinct(.data$site, .keep_all = TRUE) |> 
-  dplyr::mutate(hole_id = dplyr::row_number(), .before = "site")
+  dplyr::distinct(.data$site_hole, .keep_all = TRUE) |> 
+  dplyr::mutate(hole_id = dplyr::row_number(), .before = "site_hole")
 
 # to database (NSB neptune_hole_summary)
 DBI::dbWriteTable(con, "neptune_hole_summary", dino_loc, overwrite = TRUE)
@@ -140,21 +140,23 @@ DBI::dbWriteTable(con, "neptune_hole_summary", dino_loc, overwrite = TRUE)
 dino_smp <- dplyr::select(
   dino_all, 
   dplyr::any_of(c("sample_id", meta[!meta %in% c("longitude", "latitude")]))
-  ) |> 
+) |> 
   # code hole_id
   dplyr::mutate(
     hole_id =  
       dplyr::recode(
         .data$station, 
-        !!!setNames(dino_loc$hole_id, nm = dino_loc$site)
-        )
-    ) |> dplyr::select(-.data$station) # drop station
+        !!! setNames(dino_loc$hole_id, nm = dino_loc$site),
+      ),
+    sample_depth_mbsf = 0
+  ) |> 
+  dplyr::select(-.data$station) # drop station
 
 dino_sty <- dplyr::distinct(dino_smp, source_citation = .data$contributors) |> 
   dplyr::mutate(dataset_id = dplyr::row_number(), .before = "source_citation") 
 
 # lose contributors
-dino_smp <-  dplyr::select(dino_smp, -.data$contributors)
+dino_smp <-  dplyr::select(dino_smp, -c(contributors, depth, weight, lycopodium, lyc_tab))
 
 # to database (NSB neptune_sample)
 DBI::dbWriteTable(con, "neptune_sample", dino_smp, overwrite = TRUE)
@@ -176,7 +178,7 @@ dino_sty <- dplyr::add_row(dino_sty,
     location = "Southern hemisphere",
     available_data = "Raw Counts",
     references = "Thole et al 2022"
-    )
+  )
 
 # write table to DB
 DBI::dbWriteTable(con, "dino_sty", dino_sty)
@@ -244,29 +246,29 @@ taxon_nms <- append(
 dino_nms <- dplyr::mutate(
   dino_nms,  
   species = dplyr::recode(.data$species, !!!taxon_nms)
-  ) |> 
+) |> 
   tidyr::separate(
     species, 
     sep = " ", 
     into = c("genus", "species", "add"),  
     extra = "merge", 
     fill = "right"
-    ) |> 
+  ) |> 
    tidyr::separate(
     add, 
     sep = "sensu", 
     into = c("subspecies", "species_author"),
     extra = "merge", 
     fill = "right"
-    ) |> 
+  ) |> 
   dplyr::mutate(
     species = 
       dplyr::if_else(
         stringr::str_detect(.data$species, "^spp|^sp"), 
         NA_character_, 
         .data$species
-        )
     )
+  )
 
 # write table to DB (NSB neptune_taxonomy)
 DBI::dbWriteTable(con, "neptune_taxonomy", dino_nms, overwrite = TRUE)

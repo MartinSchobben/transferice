@@ -80,7 +80,7 @@ method_selector <- function(file_name, file_out = NULL, type = "rds",
 file_namer <- function(type, prefix, tag, taxa = "species", method = "prop", trans = NULL, 
                        viz = NULL, x = NULL) {
   
-  types <- c("raw", "engineering", "training", "validation")
+  types <- c("raw", "engineering", "training", "validation", "final")
   plots <- c("spatial", "xy", "bubble", "boxplot", "histogram")
   taxas <- c("species", "genera")
   methods <- c("prop", "partial_fit", "global_fit")

@@ -46,17 +46,11 @@ predict_server <- function(id, model_id) { # data id is based on query use R6 in
   
   moduleServer(id, function(input, output, session) {
   
-    # selected workflow
-    final <- reactive({
-      readRDS(fs::path_package("transferice", "appdir", "cache", model_id(), ext = "rds")) 
-    })
-    
-    # the new data
+    # new data for predicting
     new <- reactive({
       fossil_dinodat
     })
     
-
     # parameter
     pm <- reactive({
       pm <- strsplit(model_id(), "_")[[1]][3]
@@ -76,7 +70,6 @@ predict_server <- function(id, model_id) { # data id is based on query use R6 in
       )
     })
     
-
     fossil <- reactive({
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
@@ -85,7 +78,7 @@ predict_server <- function(id, model_id) { # data id is based on query use R6 in
       if (stringr::str_detect(model_id(), "genera")) {
 
         # all variables and their roles
-        vars <- role_organizer(dt, pm(), temporal = c("depth", "sample_id"))
+        vars <- role_organizer(dt, pm())
         
         # taxa
         txa <- vars[names(vars) == "predictor"] |> unname()
@@ -99,40 +92,37 @@ predict_server <- function(id, model_id) { # data id is based on query use R6 in
           recipes::bake(NULL)
         
       }
-      
-      # recipe
-      rcp <- final()$.workflow[[1]] |> workflows::extract_preprocessor()
-    
-      # if the recipe has a pca step then do not impute
-      if (!"pca" %in% rcp$type) {
-        impute_taxa(final(), dt, pm(), return_type = "names")
+   
+      # if the recipe has a pca step then reduce dimensions
+      if (stringr::str_detect(model_id(), "pca|pls")) {
+        reduce_taxa(model_id(), dt)
       } else {
-        dt
+        # otherwise impute missing taxa
+        impute_taxa(model_id(), dt, pm(), return_type = "impute")
       }
+
     })  
     
-  
-    # metadat (notably age or depth)
+    # metadata (notably age or depth)
     time <- reactive({
-
-      age_finder(fossil()) |> dplyr::select(sample_id, age_ma)
+      age_finder(fossil()$new_data) |> dplyr::select(sample_id, age_ma)
     })
     
     output$pred <- renderPlot({
       ggpredict(
-        final(), 
-        fossil()[time()$age_ma < req(input$int), , drop = FALSE], 
+        fossil()$model, 
+        fossil()$new_data[time()$age_ma < req(input$int), , drop = FALSE], 
         time()
       )
     })
     
-    output$comp <- renderUI({
-      print_predict(
-        final(), 
-        fossil()[time()$age_ma < req(input$int), , drop = FALSE], 
-        pm()
-        )
-      })
+    # output$comp <- renderUI({
+    #   print_predict(
+    #     final(), 
+    #     fossil()[time()$age_ma < req(input$int), , drop = FALSE], 
+    #     pm()
+    #     )
+    #   })
     
   })
 }

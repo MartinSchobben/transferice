@@ -5,8 +5,10 @@
 #' @return
 #' @export
 model_ui <- function(id) {
+  
   # namespace
   ns <- NS(id)
+  
   # elements
   tagList(
     
@@ -17,7 +19,7 @@ model_ui <- function(id) {
     waiter::use_waiter(),
     
     # Application title
-    titlePanel("Training transfer functions"),
+    titlePanel("Training Transfer Functions"),
 
     # Parameter and statistic selection
     fluidRow(
@@ -36,7 +38,7 @@ model_ui <- function(id) {
               selectInput(
                 ns("model"), 
                 "Model type", 
-                choices = c("linear model (OLS)" = "ols",  "linear model (GLS)" = "gls")
+                choices = c("linear model (OLS)" = "lm",  "linear model (GLS)" = "gls")
               ),
               uiOutput(ns("struct"))
             ),
@@ -77,7 +79,7 @@ model_ui <- function(id) {
               selectizeInput(
                 ns("dims"), 
                 "Dimension reduction", 
-                choices = c("PCA", "PLS"), 
+                choices = c("PCA" = "pca", "PLS" = "pls"), 
                 options = default_message()
               ),
               uiOutput(ns("tune"))
@@ -137,12 +139,7 @@ model_ui <- function(id) {
                   uiOutput(NS(id, "control"))
                 )
               )
-            ),
-            footer = 
-              # shinyWidgets::materialSwitch(
-              #   ns("toggle"), 
-              #   "project on map"
-              # )
+            )
          )
       ),
 
@@ -165,7 +162,8 @@ model_ui <- function(id) {
             tabPanelBody(
               value = "validation",
               shinyBS::bsCollapsePanel(title = h5("Explain more"), ""),
-              uiOutput(ns("finmetrics"))
+              uiOutput(ns("finmetrics")),
+              actionButton(ns("save"), "Save model")
             ),
             type = "hidden"
           ),
@@ -254,7 +252,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       updateSelectizeInput(
         session, 
         "dims", 
-        choices = c("PCA", "PLS"), 
+        choices = c("PCA" = "pca", "PLS" = "pls"), 
         options = default_message(),
         selected = NULL 
       )
@@ -390,7 +388,8 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
-      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", data_id(), ext = "rds")) 
+      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", 
+                                     data_id(), ext = "rds")) 
       
       if (input$taxo == "genera") {
 
@@ -409,21 +408,29 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
           recipes::bake(NULL)
 
       } 
-
-      # all variables and their roles
-      vars <- role_organizer(dt, pm())
-
-      # taxa
-      txa <- vars[names(vars) == "predictor"] |> unname()
-
-      # preprocess recipe
-      recipes::recipe(x = dt, vars = vars, roles = names(vars)) |>
-        # remove the very rare taxa
-        recipes::step_nzv(dplyr::any_of(txa)) |> 
-        # prep the data
-        recipes::prep(train = dt) |> 
-        recipes::bake(NULL)
       
+      # in case of "no" dimension reduction, rare species are removed
+      if (!isTruthy(input$dims))  {
+      
+        # all variables and their roles
+        vars <- role_organizer(dt, pm())
+  
+        # taxa
+        txa <- vars[names(vars) == "predictor"] |> unname()
+  
+        # preprocess recipe
+        recipes::recipe(x = dt, vars = vars, roles = names(vars)) |>
+          # remove the very rare taxa
+          recipes::step_nzv(dplyr::any_of(txa)) |> 
+          # prep the data
+          recipes::prep(train = dt) |> 
+          recipes::bake(NULL)
+        
+      } else {
+        
+        dt
+      
+      }
     })
 
     
@@ -453,7 +460,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         parsnip::set_mode('regression')
       
       # engine
-      if (input$model == "ols") {
+      if (input$model == "lm") {
         
         mdl <- parsnip::set_engine(mdl, 'lm') 
         
@@ -473,7 +480,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         
       } else if (input$model == "nlme") {
         
-        # to be included
+        # to be included in the future
 
       }
       mdl
@@ -483,7 +490,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
     wfl <- reactive({
       wfl <- workflows::workflow() |>
         workflows::add_recipe(rcp())
-      if (input$model == "ols") {
+      if (input$model == "lm") {
         wfl <- workflows::add_model(wfl, mdl()) 
       } else if (input$model == "gls") {
         # fixed formula should be supplied to prevent lon and lat to be included 
@@ -495,6 +502,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
     
     # tuning
     tun <- eventReactive(input$run, {
+      
       # waiter
       waiter <- waiter::Waiter$new()
       waiter$show()
@@ -502,7 +510,8 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
-      nm <- file_namer("rds", "training", data_id(), taxa = input$taxo, trans = wfl_nm) # file name
+      nm <- file_namer("rds", "training", data_id(), taxa = input$taxo, 
+                       trans = wfl_nm) # file name
       
       # tuning
       set.seed(2)
@@ -510,8 +519,8 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         app_caching("rds", nm) # caching
     })
     
-    # model workflow name
-    model_id <- eventReactive(input$run, {
+    # finalize model (with or without tuning)
+    final <- eventReactive({input$run | input$ncomp}, { 
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
       # add tune element
@@ -519,16 +528,34 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
       }
       # file name
-      file_namer("rds", "validation", data_id(), taxa = input$taxo, trans = wfl_nm)
+      nm <- file_namer("rds", "validation", data_id(), taxa = input$taxo, trans = wfl_nm)
+      transferice_finalize(splt(), wfl(), input$ncomp) |> 
+        app_caching("rds", nm) # caching
     })
     
-    observe(message(glue::glue("{model_id()}")))
+    # model workflow name
+    model_id <- eventReactive({input$run | input$ncomp}, {
+      # name for caching
+      wfl_nm <- sanitize_workflow(wfl()) # workflow name
+      # add tune element
+      if (isTruthy(input$ncomp)) {
+        wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
+      }
+      # file name
+      file_namer("rds", "final", data_id(), taxa = input$taxo, trans = wfl_nm)
+    })
     
-    # finalize model (with or without tuning)
-    final <- eventReactive({input$run | input$ncomp}, { 
-      
-      transferice_finalize(splt(), wfl(), input$ncomp) |> 
-        app_caching("rds", model_id()) # caching
+    observeEvent(input$save, {
+      if (isTruthy(input$dims)) {
+        wfl <- tune::finalize_workflow(
+          wfl(),
+          tibble::tibble(num_comp = input$ncomp)
+        )
+      } else{
+        wfl <- wfl()
+      }
+      parsnip::fit(wfl, dat()) |> 
+        app_caching("rds", model_id())
     })
 
 #-------------------------------------------------------------------------------
@@ -537,7 +564,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
 
     # feature engineering, training and validation viz
     file_info <- reactive({
-      # browser()
+      
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
         dat <- splt()
@@ -581,6 +608,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
                               taxa = input$taxo, method = method, 
                               trans = wfl_label)
       
+      # dimensions of main panel plot
       width <- height <- file$height
    
       # output
@@ -590,7 +618,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
     
     # create plot or animation (save in `reactiveValues`)
     observe({
-
+   
       req(file_info())
 
       # predictor
@@ -602,6 +630,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         pred <- input$peek
       }
       
+      # create file
       file$path <- ggpartial(
         obj = file_info()$dat,
         workflow = wfl(),
@@ -609,7 +638,6 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         pred = pred,
         tune = input$ncomp,
         type = file_info()$viz,
-        base_map = NULL, #base(),
         id = file_info()$data_name
       ) |>
         # caching of file
@@ -620,28 +648,26 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
 
     # cross plots and validation plots
     output$eng <- output$final <- renderImage({
-      req(file$path)
-      # if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
+     
+      if (file_checker(req(file_info()$file_name), req(file$path))) {
         list(
           height = file$height, 
           width = file$height, 
           src = file$path, 
           contentType = 'image/png'
         )
-      # }
+      }
     },
     deleteFile = FALSE
     )
     
-    observe(message(glue::glue("{fs::path_ext_remove(basename(req(file$path)))}")))
-    observe(message(glue::glue("{file_info()$file_name}")))
-    
     # CV animations
     output$part  <- renderUI({
-      if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
+      
+      if (file_checker(req(file_info()$file_name), req(file$path))) {
         tags$video(
           height = file$height, 
-          width = if (isTruthy(input$toggle)) file$width else file$height, 
+          width = file$height, 
           type = "video/mkv", 
           src = file$path, 
           autoplay = TRUE,
@@ -652,17 +678,18 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
     
     # render controller for predictor selection in plot output
     output$control <- renderUI({
-      
-      # species names
-      spec_nms <- taxa_naming(wfl()) 
-      spec_nms <- rlang::set_names(
-        paste0("taxa_", seq_along(spec_nms)), 
-        spec_nms
-      )
-      
+
       if (input$specs != "validation") {
         
         if (!isTruthy(input$dims)) {
+          
+          # species names
+          spec_nms <- taxa_naming(wfl()) 
+          spec_nms <- rlang::set_names(
+            paste0("taxa_", seq_along(spec_nms)), 
+            spec_nms
+          )
+          
           selectInput(
             NS(id, "peek"), 
             "Taxa selection",
@@ -670,7 +697,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
             selected = isolate(input$peek)
           )
           
-        } else if (input$dims == "PCA") {
+        } else if (input$dims == "pca") {
         
           selectInput(
             NS(id, "comp"), 
@@ -798,4 +825,9 @@ info_train <- function(...) {
       )
     )
   )
+}
+
+
+file_checker <- function(name, file) {
+  fs::path_ext_remove(basename(file)) == name
 }

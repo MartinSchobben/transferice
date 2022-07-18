@@ -24,10 +24,10 @@ fossil_dinodat <- fossil_dinodat[,-61] # remove duplicated name Hystrichokolpoma
 fossil_dinodat <- fossil_dinodat |> 
   dplyr::rename_with(~stringr::str_remove(.x, "(?<=\\[#\\])(.)*")) |> 
   dplyr::rename_with(~stringr::str_trim(stringr::str_remove(.x, "\\[#\\]"))) |> 
-  dplyr::rename(!!!vc_nms)
+  dplyr::rename(!!!vc_nms, sample_depth_mbsf = "depth")
   
 # metadata
-fossil_dinodat_meta <- dplyr::select(fossil_dinodat_raw, c(depth, method, Age_Ma)) |> 
+fossil_dinodat_meta <- dplyr::select(fossil_dinodat_raw, c(sample_depth_mbsf = "depth", method, Age_Ma)) |> 
   dplyr::mutate(sample_id = dplyr::row_number())
 
 use_data(fossil_dinodat, overwrite = TRUE)

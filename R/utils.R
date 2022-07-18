@@ -3,7 +3,7 @@
 calc_taxon_prop <- function(
     con, 
     count = "neptune_sample_taxa", 
-    meta =  "neptune_sample", 
+    sample =  "neptune_sample", 
     taxon = "neptune_taxonomy"
   ) {
   # obtain counts and make wide format
@@ -12,6 +12,7 @@ calc_taxon_prop <- function(
     paste0(
       "SELECT 
         c.sample_id, 
+        s.sample_depth_mbsf,
         taxon_abundance / SUM(taxon_abundance) 
           OVER (PARTITION BY c.sample_id) AS taxon_prop, 
             c.taxon_id,
@@ -20,9 +21,8 @@ calc_taxon_prop <- function(
               COALESCE(' ' || species, '') || 
                 COALESCE(' ' || subspecies, '')  AS name
                   FROM ", count, " AS c
-                    LEFT JOIN ", meta, " AS s ON c.sample_id = s.sample_id
-                      LEFT JOIN ", taxon, " AS t 
-                        ON c.taxon_id = t.taxon_id"
+                    LEFT JOIN ", sample, " AS s ON c.sample_id = s.sample_id
+                      LEFT JOIN ", taxon, " AS t ON c.taxon_id = t.taxon_id"
     )
   ) |> 
     # drop taxon id

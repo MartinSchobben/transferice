@@ -1,9 +1,11 @@
 test_that("impute taxa", {
   
-  final <- readRDS("~/Documents/work/code/transferice/inst/appdir/cache/validation_dinocyst_t_an_global_count_species_rename_lm.rds")
-  
+
   # impute data
   impute_taxa(final, fossil_dinodat, "t_an", return_type = "names")  
+  
+  # reduce data
+  reduce_taxa("validation_dinocyst_t_an_global_0mbsf_species_prop_log_center_pca_lm_1", dplyr::select(new_data, -depth))
   
 })
 
