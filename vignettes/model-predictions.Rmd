@@ -145,30 +145,31 @@ ggpartial(final, gls_wfl, pred = "taxa_2", out = "t_an", type = "bubble")
 
 ```{r predict, options}
 # finalized workflow fitted on all data
-final_fit <- fit(gls_wfl, data = select(modern, -age_ma))
+final_fit <- fit(gls_wfl, data = modern)
 
 # new recipe
 # variables
-vars <- role_organizer(fossil, NULL)
+fossil_tx <- fossil[,c(5, 6, 9:128)]
+age_ma <- fossil$age_ma
+
+vars <- role_organizer(fossil_tx, NULL, group = NULL, temporal = NULL, meta = NULL)
 # taxa
 txa <- vars[names(vars) == "predictor"] |> unname()
 
 # recipe
-rcp <- recipe(x = fossil, vars = vars, roles = names(vars)) |> 
+rcp <- recipe(x = fossil_tx, vars = vars, roles = names(vars)) |> 
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
   step_center(dplyr::any_of(txa)) |> 
   # reduce dimensions (with 4 dims)
-  step_pca(dplyr::any_of(txa), num_comp = 4) |> 
-  # update spatial to predictor
-  update_role(longitude, latitude, new_role = "predictor") 
+  step_pca(dplyr::any_of(txa), num_comp = 4) 
 
 # extract model
 final_mdl <- final_fit |> extract_fit_parsnip()
 
 # bake fossil data
-fossil_prepped <- prep(rcp, training = fossil) |> 
+fossil_prepped <- prep(rcp, training = fossil_tx) |> 
     bake(new_data = NULL)
 
 # predict on new data
