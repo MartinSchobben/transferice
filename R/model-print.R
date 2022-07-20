@@ -14,26 +14,26 @@ print_model.mc_split <- function(
     workflow, 
     pred = NULL,
     tune = NULL,
-    out = NULL
+    out = NULL,
+    exclude = c("sample_id", "hole_id", "longitude", "latitude")
   ) {
   
   # number of outcome
-  var_info <- workflows::extract_preprocessor(workflow)$var_info |> 
+  rcp <- workflows::extract_preprocessor(workflow)
+  
+  var_info <- rcp$var_info |> 
     dplyr::filter(.data$role == "outcome") 
   # number of outcome
   nout <- nrow(var_info)
   
+  # untune
+  rcp <- untune(rcp, tune)
   # number of predictors
-  cast <- ggpartial(
-    obj = obj, 
-    workflow = workflow,         
-    pred = pred,
-    tune = tune,
-    out = out, 
-    return_type = "cast"
-  )
+  cast <- recipes::prep(rcp, training = rsample::training(obj)) |> 
+    # apply to training data
+    recipes::bake(new_data = NULL)
   # number of predictors after cast
-  npred <- length(cast[!names(cast) %in% var_info$variable])
+  npred <- length(cast[!names(cast) %in% c(var_info$variable, exclude)])
   
   out <- paste("<b>features</b>: <br/> <br/> outcome ($Y$):", nout)
   pred <- paste("predictors ($X$):", npred)
@@ -65,7 +65,8 @@ print_model.tune_results  <- function(
     tune = NULL,
     out = NULL,
     height = NULL,
-    width = NULL
+    width = NULL,
+    id = character(0)
  ) {
  
   # predictor variable
@@ -87,61 +88,23 @@ print_model.tune_results  <- function(
         
   }
   
-  obj <- dplyr::filter(obj, .data$.estimate < 100) # remove extreme outliers
-  
-  # name
-  y <- rlang::ensym(out) 
+
   workflow_specs <- sanitize_workflow(workflow)
-  nm <- paste("folds", "boxplot", workflow_specs, as_name(y), x, sep = "_") 
-  
-  # potential path
-  ggpath <- try(
-    fs::path_package("transferice", "www", "img", nm, ext = "png"), 
-    silent = TRUE
-  )
-  
-  if (inherits(ggpath, "try-error")) {
+  # file name
+  if (length(unique(obj$var)) != 1) viz <- "boxplot" else viz <- "histogram"
+  file_name <- file_namer("png", "training", id, trans = workflow_specs, 
+                          viz = viz, x = x)
   
   # boxplot of model RMSE
-  p <- ggplot2::ggplot(
-    data = obj,
-    mapping = ggplot2::aes(
-      x = .data$var,
-      y = .data$.estimate,
-      group = .data$var,
-      fill = .data$slct
-    )
-  ) +
-    ggplot2::geom_boxplot(show.legend = FALSE) +
-    ggplot2::scale_x_discrete(
-      "components", 
-      labels = as.character(1:10), 
-      breaks = 1:10
-    ) +
-    ggplot2::labs(y = "RMSRE")
-  
-  # add theme
-  p <- p + transferice_theme() 
-  
-  # save plot
-  ggplot2::ggsave(
-    fs::path(nm, ext = "png"),
-    plot = p, 
-    path = fs::path_package(package = "transferice", "www", "img"),
-    width = width,
-    height = height,
-    dpi = 72,
-    units = "px"
-  )
-  
-  }
+  ggperformance(obj) |> 
+      app_caching(type = "png", file_name = file_name, width = width, height = height)
   
   # plot and print with mathjax
   tagList(    
     tags$br(),
     tags$br(), 
     tags$div(
-      tags$img(src = fs::path("img", nm, ext = "png")), 
+      tags$img(src = fs::path("img", file_name, ext = "png")), 
       style="text-align: center;"
     ),
     tags$br(),
@@ -149,7 +112,7 @@ print_model.tune_results  <- function(
     withMathJax(
       HTML(
         paste0(
-          "$RMSRE = \\sqrt{\\frac{1}{N}\\sum{\\left( \\frac{\\hat{Y}}{Y} - 1\\right)^2}}$",  
+          "$RMSE = \\sqrt{\\frac{1}{N}\\sum{\\left(Y - \\hat{Y} \\right)^2}}$",  
           "<br/><br/> <b>Click the button 'Reset model' to select ", 
           "another model.</b>"
         )
@@ -170,10 +133,40 @@ print_model.last_fit  <- function(
   
   # all collected metrics
   mts <- tune::collect_metrics(obj)
-  a <- print_metric(mts, "rsq")
+  # a <- print_metric(mts, "rsq")
   b <- print_metric(mts, "rmse")
-  c <- print_metric(mts, "rmsre")
-  all <- paste(a, b, c, sep = "<br/><br/>")
+  # c <- print_metric(mts, "rmsre")
+  # all <- paste(a, b, c, sep = "<br/><br/>")
   # print with mathjax
-  withMathJax(HTML(paste0("<b>model fit metrics</b>: <br/> <br/>", all)))
+  withMathJax(HTML(paste0("<b>model fit metrics</b>: <br/> <br/>", b)))
+  
 }
+
+
+ggperformance <- function(obj) {
+  
+  if (length(unique(obj$var)) != 1) {
+    p <- ggplot2::ggplot(
+      data = obj,
+      mapping = ggplot2::aes(
+        x = .data$var,
+        y = .data$.estimate,
+        group = .data$var,
+        fill = .data$slct
+      )
+    ) +
+      ggplot2::geom_boxplot(show.legend = FALSE) +
+      ggplot2::labs(y = "RMSE", x = "Principal Component") 
+  } else {
+    p <- ggplot2::ggplot(
+      data = obj,
+      mapping = ggplot2::aes(x = .data$.estimate)
+    ) +
+      ggplot2::labs(x = "RMSE") +
+      ggplot2::geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)))
+  }
+  
+  p + transferice_theme()
+  
+
+} 

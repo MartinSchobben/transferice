@@ -12,9 +12,9 @@ ggpartial(obj, ...)
 \method{ggpartial}{mc_split}(
   obj,
   workflow,
+  out,
   pred = NULL,
   tune = NULL,
-  out,
   type = "xy",
   base_map = NULL,
   return_type = "plot",
@@ -23,23 +23,23 @@ ggpartial(obj, ...)
 
 \method{ggpartial}{tune_results}(
   obj,
-  workflow = NULL,
+  workflow,
+  out,
   pred = NULL,
   tune = NULL,
-  out,
   type = "xy",
   base_map = NULL,
   plot_type = "dynamic",
-  id,
+  id = NULL,
   mc_cores = 2
 )
 
 \method{ggpartial}{last_fit}(
   obj,
-  workflow = NULL,
+  workflow,
+  out,
   pred = NULL,
   tune = NULL,
-  out,
   type = "xy",
   base_map = NULL,
   id
@@ -48,11 +48,11 @@ ggpartial(obj, ...)
 \arguments{
 \item{obj}{Rsample mc_split object or tune tune_results object.}
 
+\item{out}{Outcome variable (character or symbol).}
+
 \item{pred}{Predictor variable (character string).}
 
 \item{tune}{Tune variable (character or numeric string).}
-
-\item{out}{Outcome variable (character or symbol).}
 
 \item{type}{Plot output type. "Regression" for a simple scatter plot with a
 regression line. "Spatial" for a projection on a global map.}

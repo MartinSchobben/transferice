@@ -165,3 +165,31 @@ transferice_theme <- function(base = ggplot2::theme_classic(), ...) {
       )
     )
 }
+
+clean_cache <- function(module = "training", type = "all") {
+  cache_pkg <- fs::path_package(package = "transferice", "inst", "appdir", "cache")
+  img_pkg <- fs::path_package(package = "transferice", "inst", "www", "img")
+  vid_pkg <- fs::path_package(package = "transferice", "inst", "www", "vid")
+  model_pkg <- fs::path_package(package = "transferice",  "inst", "appdir", "model-module")
+  
+  if (module == "training") {
+    if (type == "all" || type == "data") {
+    files_train <- list.files(cache_pkg) 
+      list.files(cache_pkg, full.names = TRUE)[grepl("^training", files_train)] |> 
+        fs::file_delete()
+    }
+    if (type == "all" || type == "img") {
+      fs::file_delete(list.files(img_pkg, full.names = TRUE))
+    }
+    if (type == "all" || type == "vid") {
+      fs::file_delete(list.files(vid_pkg, full.names = TRUE))
+      files_model <- list.files(model_pkg)
+    }
+    if (type == "all" || type == "module") {
+      list.files(model_pkg, full.names = TRUE)[grepl("[^app.R]", files_model)] |> 
+        fs::file_delete()
+    }
+  }
+  
+  
+}

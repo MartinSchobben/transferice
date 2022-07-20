@@ -114,7 +114,7 @@ dinodat_tune <- tune::tune_grid(
 ```{r out}
 library(ggplot2)
 collect_metrics(dinodat_tune, summarize = FALSE) |> 
-  filter(.estimate < 100) |>
+  # filter(.estimate < 100) |>
   ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
   geom_boxplot()
 ```

@@ -49,11 +49,12 @@ model_ui <- function(id) {
                 "", 
                 icon = icon('question-circle')
               ),
-              selectizeInput(
+              selectInput(
                 ns("taxo"), 
                 "Taxomomic depth", 
                 choices = c("species", "genera"), 
-                options = default_message()
+                selected = "species"
+                # options = default_message()
               ),
               # variance-stabilizing transformations
               actionLink(
@@ -106,7 +107,8 @@ model_ui <- function(id) {
               tags$br(),
               wellPanel(uiOutput(ns("helptext")))
             )
-          )
+          ),
+          style = "height:100%;"
         )
       ),
       
@@ -166,7 +168,8 @@ model_ui <- function(id) {
               uiOutput(ns("finmetrics"))
             ),
             type = "hidden"
-          )
+          ),
+          style = "height:100%;"
         )
       )
     )
@@ -227,6 +230,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       shinyjs::disable("scale")
       shinyjs::disable("dims")
       shinyjs::disable("model")
+      # if (isTruthy(input$ncomp)) shinyjs::disable("ncomp")
+      if (isTruthy(input$spat)) shinyjs::disable("spat")
     })
     
     observeEvent(input$reset, {
@@ -238,6 +243,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       shinyjs::enable("scale")
       shinyjs::enable("dims")
       shinyjs::enable("model")
+      # if (isTruthy(input$ncomp)) shinyjs::enable("ncomp")
+      if (isTruthy(input$spat)) shinyjs::enable("spat")
       # back to start
       updateTabsetPanel(session, "results", selected = "engineering")
       updateTabsetPanel(session, "specs", selected = "engineering")
@@ -391,14 +398,44 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       # for now data is from a local source but later-on it should be sourced 
       # from the explo-module
       nm <- file_namer("rds", "raw", data_id, "count", "prop")
-      readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) #|>
-        #dplyr::slice_sample(n = 600)
+      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", nm, ext = "rds")) 
+
+      if (input$taxo == "genera") {
+        
+        # all variables and their roles
+        vars <- role_organizer(dt, pm())
+        
+        # taxa
+        txa <- vars[names(vars) == "predictor"] |> unname()
+        
+        # variables not used in transform
+        terms <- vars[names(vars) != "predictor"]
+        
+        dt <- recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
+          step_taxo(dplyr::any_of(unname(terms))) |> 
+          recipes::prep(training = dt) |> 
+          recipes::bake(NULL) 
+      } 
+      
+      # all variables and their roles
+      vars <- role_organizer(dt, pm())
+      
+      # taxa
+      txa <- vars[names(vars) == "predictor"] |> unname()
+      
+      # remove the very rare taxa
+      recipes::recipe(x = dt, vars = vars, roles = names(vars)) |> 
+        recipes::step_nzv(dplyr::any_of(txa))  |> 
+        recipes::prep(training = dt) |> 
+        recipes::bake(NULL) 
+      
     })
     
     # re-sample
     splt <- reactive({
       set.seed(1)
-      splt <- rsample::initial_split(dat(), prop = 0.75, strata = "latitude") # stratify on most important latitude
+      # stratify on most important latitude
+      splt <- rsample::initial_split(dat(), prop = 0.8, strata = "latitude") 
     })
     
     # recipe
@@ -468,8 +505,8 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       on.exit(waiter$hide())
       
       # name for caching
-      wfl_nm <- sanitize_workflow(wfl()) # workflow name
-      nm <- file_namer("rds", "training", data_id, trans = wfl_nm)
+      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
+      nm <- file_namer("rds", "training", data_id, trans = wfl_nm) # file name
       
       # tuning
       set.seed(2)
@@ -478,14 +515,20 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     })
     
     # finalize model (with or without tuning)
-    final <- eventReactive(input$run, {
+    final <- eventReactive({input$run | input$ncomp}, { 
       
       # name for caching
-      wfl_nm <- sanitize_workflow(wfl()) # workflow name
-      wfl_nm <- paste(wfl_nm, input$dim, input$comp, sep = "_") # add tune element
+      wfl_nm <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_") # workflow name
+      # add tune element
+      if (isTruthy(input$ncomp)) {
+        wfl_nm <- paste(wfl_nm, input$ncomp, sep = "_") 
+      }
+      
+      # browser()
+      # file name
       nm <- file_namer("rds", "validation", data_id, trans = wfl_nm)
       
-      transferice_finalize(splt(), wfl(), input$comp) |> 
+      transferice_finalize(splt(), wfl(), input$ncomp) |> 
         app_caching("rds", nm) # caching
     })
 
@@ -495,7 +538,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 
     # feature engineering, training and validation viz
     file_info <- reactive({
-
+      # browser()
       # initial split or fitted/tuned data
       if (input$specs == "engineering") {
         dat <- splt()
@@ -510,23 +553,28 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       
       # fitted data requires a species name variable selection
       if (isTruthy(input$dims))  {
-        req(input$comp) 
-        x <- input$comp
+        x <- paste0(req(input$comp), "of", req(input$ncomp))
       # tuned data requires a dimension variable selection
       } else {
         req(input$peek)
         x <- input$peek
       }
-      
+
       # file metadata
-      #if (isTruthy(input$toggle))  viz <- "spatial" else viz <- "xy"
-      if (input$specs != "validation" || !isTruthy(input$diag))  viz <- "xy" else viz <- input$diag 
-      wfl_label <- sanitize_workflow(wfl())
+      if (input$specs != "validation" || !isTruthy(input$diag)) {
+        viz <- "xy" 
+      } else {
+        viz <- input$diag 
+      }
+      
+      # workflow    
+      wfl_label <- paste(input$taxo, sanitize_workflow(wfl()), sep = "_")
+      
+      # file name
       file_name <- file_namer(type, input$specs, data_id, trans = wfl_label, 
                               viz = viz, x = x)
-      height <- file$height
-      if (isTruthy(input$toggle)) width <- file$width else width <- file$height
-      
+      width <- height <- file$height
+   
       # output
       list(dat = dat, viz = viz, type = type, file_name = file_name, 
            width = width, height = height) 
@@ -535,12 +583,23 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
     # create plot or animation (save in `reactiveValues`)
     observe({
 
+      req(file_info())
+      
+      # predictor
+      if (isTruthy(input$dims)) {
+        req(input$comp)
+        pred <- input$comp
+      } else {
+        req(input$peek)
+        pred <- input$peek
+      }
+      
       file$path <- ggpartial(
         obj = file_info()$dat,
         workflow = wfl(),
-        pred = input$peek,
-        tune = input$comp,
         out = pm(),
+        pred = pred,
+        tune = input$ncomp,
         type = file_info()$viz,
         base_map = NULL, #base(),
         id = data_id
@@ -551,18 +610,23 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 
     })
 
-    # cross plots
-    output$eng <- renderImage({
+    # cross plots and validation plots
+    output$eng <- output$final <- renderImage({
       req(file$path)
-      list(
-        height = file$height, 
-        width = if (isTruthy(input$toggle)) file$width else file$height, 
-        src = file$path, 
-        contentType = 'image/png'
-      )
+      # if (fs::path_ext_remove(basename(req(file$path))) == file_info()$file_name) {
+        list(
+          height = file$height, 
+          width = file$height, 
+          src = file$path, 
+          contentType = 'image/png'
+        )
+      # }
     },
     deleteFile = FALSE
     )
+    
+    observe(message(glue::glue("{fs::path_ext_remove(basename(req(file$path)))}")))
+    observe(message(glue::glue("{file_info()$file_name}")))
     
     # CV animations
     output$part  <- renderUI({
@@ -578,20 +642,7 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
       }
     })
     
-    # final model image
-    output$final <- renderImage({
-      req(file$path)
-      list(
-        height = file$height, 
-        width = if (isTruthy(input$toggle)) file$width else file$height, 
-        src = file$path, 
-        contentType = 'image/png'
-      )
-    },
-    deleteFile = FALSE
-    )
-    
-    # render controller based on tuning results
+    # render controller for predictor selection in plot output
     output$control <- renderUI({
       
       # species names
@@ -607,14 +658,18 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
           selectInput(
             NS(id, "peek"), 
             "Taxa selection",
-            choices = spec_nms
+            choices = spec_nms,
+            selected = isolate(input$peek)
           )
+          
         } else if (input$dims == "PCA") {
+        
           selectInput(
             NS(id, "comp"), 
             "Principal component", 
-             choices = 1:4
+            choices = paste0("PC", 1:req(input$ncomp))
           )
+          
         }
         
       } else {
@@ -632,54 +687,72 @@ model_server <- function(id, data_id = "dinocyst_t_an_global") { # data id is ba
 # side panel    
 #-------------------------------------------------------------------------------    
 
-    # # side panel (sub) model metrics
-    # output$results <- renderText({
-    #   if (input$specs == "engineering") {
-    #     "Model setup"
-    #   } else if (input$specs == "training") {
-    #     "Model optimization"
-    #   } else if (input$specs == "validation") {
-    #     "Model performance"
-    #   }
-    # })
-    # 
+    # side panel (sub) model metrics
+    output$results <- renderText({
+      if (input$specs == "engineering") {
+        "Model setup"
+      } else if (input$specs == "training") {
+        "Model optimization"
+      } else if (input$specs == "validation") {
+        "Model performance"
+      }
+    })
+
     # # show locations selection controls when data loaded
-    # observe({
-    #   updateTabsetPanel(session, "results", selected = input$specs)
-    # })
-    # 
-    # # model features as text in side panel
-    # output$setup <- renderUI({
-    #   # fitted data requires a species name variable selection
-    #   # tuned data requires a dimension variable selection
-    #   if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
-    #   print_model(
-    #     obj = splt(),
-    #     workflow = wfl(),
-    #     pred = input$peek,
-    #     tune = input$comp,
-    #     out = pm()
-    #   )
-    # })
-    # 
-    # # plot the submodel metrics as a boxplot
-    # output$submetrics <- renderUI({
-    #   # fitted data requires a species name variable selection
-    #   # tuned data requires a dimension variable selection
-    #   if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
-    #   print_model(
-    #     obj = tun(), 
-    #     workflow = wfl(), 
-    #     pred = input$peek, 
-    #     tune = input$comp, 
-    #     out = pm(),
-    #     width = 250,
-    #     height = 250
-    #   )
-    # })
-    # 
-    # # final model metric as text in side panel
-    # output$finmetrics <- renderUI({print_model(final())})
+    observe({
+      updateTabsetPanel(session, "results", selected = input$specs)
+    })
+
+    # model features as text in side panel
+    output$setup <- renderUI({
+      # fitted data requires a species name variable selection
+      # tuned data requires a dimension variable selection
+      # predictor
+      if (isTruthy(input$dims)) {
+        req(input$comp)
+        pred <- input$comp
+      } else {
+        req(input$peek)
+        pred <- input$peek
+      }
+      print_model(
+        obj = splt(),
+        workflow = wfl(),
+        pred = pred,
+        tune = input$ncomp,
+        out = pm()
+      )
+    })
+
+    # plot the submodel metrics as a boxplot
+    output$submetrics <- renderUI({
+      
+      # predictor
+      if (isTruthy(input$dims)) {
+        req(input$comp)
+        pred <- input$comp
+      } else {
+        req(input$peek)
+        pred <- input$peek
+      }
+      # fitted data requires a species name variable selection
+      # tuned data requires a dimension variable selection
+      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
+      print_model(
+        obj = tun(),
+        workflow = wfl(),
+        pred = pred,
+        tune = input$ncomp,
+        out = pm(),
+        width = 250,
+        height = 250,
+        id = data_id
+      )
+    }) |> 
+      bindEvent(tun())
+
+    # final model metric as text in side panel
+    output$finmetrics <- renderUI({print_model(final())})
   })
 }
 
@@ -691,8 +764,8 @@ info_eng <- function(...) {
         paste0("This section deals with preparing the data before model ", 
                "training. It mainly involves variance stabilization of ", 
                "predictors and the reduction of dimensionality. All models ", 
-               "are based on a multivariate multiple linear regression, based ", 
-               "on a matrix of n-predictors ($X$) and a matrix of m-outcomes ", 
+               "are based on a multiple linear regression, based ", 
+               "on a matrix of n-predictors ($X$) and a vector of outcomes ", 
                "($Y$).")
       )
     )
@@ -710,8 +783,7 @@ info_train <- function(...) {
                "a minimal amount of wobbling in the regression line. <br/>",
                "2) It helps select the optimal number of dimensions after ",
                "dimension reduction by principal component analyses. <br/>",
-               "<br/>A good model has a low Root Mean Square Relative ",
-               "Error.")
+               "<br/>A good model has a low Root Mean Square Error.")
       )
     )
   )
