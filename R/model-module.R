@@ -148,7 +148,11 @@ model_ui <- function(id) {
         wellPanel(
           tabsetPanel(
             id = ns("results"),
-            header = tagList(tags$h5(textOutput(ns("results"))), tags$hr()),
+            header = 
+              tagList(
+                tags$h5(textOutput(ns("results"))), 
+                tags$hr()
+              ),
             tabPanelBody(
               value = "engineering",
               shinyBS::bsCollapsePanel(title = h5("Explain more"), info_eng()),
@@ -157,6 +161,8 @@ model_ui <- function(id) {
             tabPanelBody(
               value = "training",
               shinyBS::bsCollapsePanel(title = h5("Explain more"), info_train()),
+              br(),
+              div(plotOutput(ns("submodel")), align = "center"),
               uiOutput(ns("submetrics"))
             ),
             tabPanelBody(
@@ -176,7 +182,7 @@ model_ui <- function(id) {
 #' @rdname 
 #' 
 #' @export
-model_server <- function(id, data_id) { # data id is based on query use R6 in future
+model_server <- function(id, data_id) { # `data_id` is based on query in explo-module
   
   # checks
   stopifnot(is.reactive(data_id))
@@ -188,12 +194,15 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
 #-------------------------------------------------------------------------------    
     
     # `reactiveValues` to store image path and dimensions
-    file <- reactiveValues(path = NULL, width = NULL, height  = NULL)
+    file <- reactiveValues(path = NULL, side_path = NULL, width = NULL, 
+                           height = NULL, side_width = NULL, side_height = NULL)
     observe({  
+   
       # dynamic plot size
       file$width <- session$clientData[[paste0("output_",id ,"-eng_width")]]
       file$height <- session$clientData[[paste0("output_",id ,"-eng_height")]]
-
+      file$side_width <- session$clientData[[paste0("output_",id ,"-submodel_width")]] 
+      file$side_height <- session$clientData[[paste0("output_",id ,"-submodel_height")]] 
     })
     
     # selected parameter
@@ -533,7 +542,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         app_caching("rds", nm) # caching
     })
     
-    # model workflow name
+    # model name
     model_id <- eventReactive({input$run | input$ncomp}, {
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
@@ -545,6 +554,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       file_namer("rds", "final", data_id(), taxa = input$taxo, trans = wfl_nm)
     })
     
+    # final model for exportation
     observeEvent(input$save, {
       if (isTruthy(input$dims)) {
         wfl <- tune::finalize_workflow(
@@ -554,6 +564,7 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       } else{
         wfl <- wfl()
       }
+ 
       parsnip::fit(wfl, dat()) |> 
         app_caching("rds", model_id())
     })
@@ -591,10 +602,14 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
 
       # file metadata
       if (input$specs != "validation" || !isTruthy(input$diag)) {
+        # main figure
         viz <- "xy" 
       } else {
         viz <- input$diag 
       }
+      
+      # side figure
+      if (isTruthy(input$dim)) side_viz <- "boxplot" else side_viz <- "histogram"
       
       # workflow    
       wfl_label <- sanitize_workflow(wfl())
@@ -603,6 +618,11 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       file_name <- file_namer(type, input$specs, data_id(), 
                               taxa = input$taxo, method = method,
                               trans = wfl_label, viz = viz, x = x)
+      
+      # side panel file name
+      side_file_name <- file_namer("png", "training", data_id(), 
+                                   taxa = input$taxo, method = method,
+                                   trans = wfl_label, viz = side_viz, x = x)
       # file name
       data_name <- file_namer("rds", input$specs, data_id(),
                               taxa = input$taxo, method = method, 
@@ -610,10 +630,15 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
       
       # dimensions of main panel plot
       width <- height <- file$height
+      
+      # dimensions of side panel plot
+      side_width <- side_height <- file$side_width * 0.75
    
       # output
       list(dat = dat, viz = viz, type = type, file_name = file_name, 
-           data_name = data_name, width = width, height = height) 
+           side_file_name = side_file_name,
+           data_name = data_name, width = width, height = height, 
+           side_width = side_width, side_height = side_height) 
     })
     
     # create plot or animation (save in `reactiveValues`)
@@ -755,12 +780,13 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         workflow = wfl(),
         pred = pred,
         tune = input$ncomp,
-        out = pm()
+        out = pm(),
+        spat = input$spat
       )
     })
 
     # plot the submodel metrics as a boxplot
-    output$submetrics <- renderUI({
+    observe({
       
       # predictor
       if (isTruthy(input$dims)) {
@@ -770,21 +796,41 @@ model_server <- function(id, data_id) { # data id is based on query use R6 in fu
         req(input$peek)
         pred <- input$peek
       }
-      # fitted data requires a species name variable selection
-      # tuned data requires a dimension variable selection
-      if (isTruthy(input$dims))  req(input$comp) else req(input$peek)
-      print_model(
-        obj = tun(),
-        workflow = wfl(),
-        pred = pred,
-        tune = input$ncomp,
-        out = pm(),
-        width = 250,
-        height = 250,
-        id = data_id()
-      )
-    }) |> 
-      bindEvent(tun())
+
+      # only show in the training module
+      if (req(input$results) == "training") {
+        file$side_path <- ggperformance(
+          obj = req(tun()), 
+          pred = pred, 
+          tune = input$ncomp
+        ) |> 
+          app_caching(
+            "png", 
+            req(file_info()$side_file_name), 
+            req(file_info()$side_width),
+            req(file_info()$side_height)
+          )
+      }
+    })
+    
+    # plot
+    output$submodel <- renderImage({
+      if (file_checker(req(file_info()$side_file_name), req(file$side_path))) {
+        list(
+          height = file$side_width * 0.75, 
+          width = file$side_width * 0.75, 
+          src = file$side_path, 
+          contentType = 'image/png'
+        )
+      }
+    },
+    deleteFile = FALSE
+    )
+    
+    # and print a text
+    output$submetrics <- renderUI({
+      print_model(obj = tun(), workflow = wfl())
+    })
 
     # final model metric as text in side panel
     output$finmetrics <- renderUI({print_model(final())})
@@ -829,5 +875,6 @@ info_train <- function(...) {
 
 
 file_checker <- function(name, file) {
+  if(!isTruthy(name)) return(FALSE)
   fs::path_ext_remove(basename(file)) == name
 }

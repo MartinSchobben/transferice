@@ -1,5 +1,5 @@
 # object can be workflow or parsnip model
-ggpredict <- function(obj, new_data, meta, time_unit = "age") {
+ggpredict <- function(obj, new_data, time_unit = "age") {
   
   pred <- predict(obj, new_data = new_data)
   # pred_int <- predict(obj$.workflow[[1]], new_data = new_data, type = "pred_int")
@@ -12,7 +12,6 @@ ggpredict <- function(obj, new_data, meta, time_unit = "age") {
   # add age to original data
   dplyr::bind_cols(new_data, pred) |> 
     # dplyr::bind_cols(pred_int) |> 
-    dplyr::left_join(meta, by = "sample_id") |> 
     ggplot2::ggplot(
       ggplot2::aes(
         x = .data[[x]], 

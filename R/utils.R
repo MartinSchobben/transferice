@@ -2,32 +2,53 @@
 # relative proportions for each sample
 calc_taxon_prop <- function(
     con, 
+    type = "train",
     count = "neptune_sample_taxa", 
     sample =  "neptune_sample", 
-    taxon = "neptune_taxonomy"
+    taxon = "neptune_taxonomy",
+    site = "neptune_hole_summary",
+    meta = "neptune_sod"
   ) {
+  
+  if (type == "train") {
+    x <- "sample_depth_mbsf = 0 "
+  } else if (type == "predict") {
+    x <- "sample_depth_mbsf > 0 "
+  }
+  
   # obtain counts and make wide format
   DBI::dbGetQuery(
     con ,
     paste0(
       "SELECT 
         c.sample_id, 
-        s.sample_depth_mbsf,
+        s.sample_depth_mbsf,  
         taxon_abundance / SUM(taxon_abundance) 
           OVER (PARTITION BY c.sample_id) AS taxon_prop, 
             c.taxon_id,
-            hole_id,
+            s.hole_id,
+            q.site_hole, q.longitude, q.latitude,
+            m.source_citation,
             genus ||  
               COALESCE(' ' || species, '') || 
                 COALESCE(' ' || subspecies, '')  AS name
                   FROM ", count, " AS c
                     LEFT JOIN ", sample, " AS s ON c.sample_id = s.sample_id
-                      LEFT JOIN ", taxon, " AS t ON c.taxon_id = t.taxon_id"
+                      LEFT JOIN ", taxon, " AS t ON c.taxon_id = t.taxon_id
+                        LEFT JOIN ", site, " AS q ON s.hole_id = q.hole_id
+                          LEFT JOIN ", meta, " AS m ON s.dataset_id = m.dataset_id
+                            WHERE ", x, ";"
     )
   ) |> 
     # drop taxon id
     dplyr::select(- .data$taxon_id) |> 
-    dplyr::mutate(name = stringr::str_trim(name)) |>  
+    dplyr::mutate(
+      # tidy the names
+      name = stringr::str_trim(name),
+      # add provisional age variable
+      age_ma = NA_real_
+      
+    ) |>  
     tidyr::pivot_wider(
       names_from = name,
       values_from = taxon_prop,
@@ -179,12 +200,14 @@ clean_cache <- function(module = "training", type = "all") {
   
   if (module == "training") {
     if (type == "all" || type == "data") {
-    files_train <- list.files(cache_pkg) 
-      list.files(cache_pkg, full.names = TRUE)[grepl("^raw|^training|^validation", files_train)] |> 
+      files_train <- list.files(cache_pkg) 
+      list.files(cache_pkg, full.names = TRUE)[grepl("^raw|^training|^validation|^final", files_train)] |> 
         fs::file_delete()
     }
     if (type == "all" || type == "img") {
-      fs::file_delete(list.files(img_pkg, full.names = TRUE))
+      files_img <- list.files(img_pkg)
+      list.files(img_pkg, full.names = TRUE)[grepl("^raw|^training|^validation|^engineering", files_img)] |>
+        fs::file_delete()
     }
     if (type == "all" || type == "vid") {
       fs::file_delete(list.files(vid_pkg, full.names = TRUE))

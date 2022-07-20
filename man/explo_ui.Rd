@@ -12,6 +12,9 @@ explo_server(id)
 \arguments{
 \item{id}{Namespace id.}
 }
+\value{
+Shiny module
+}
 \description{
 Shiny exploration module
 }

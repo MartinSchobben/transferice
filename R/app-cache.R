@@ -81,7 +81,7 @@ file_namer <- function(type, prefix, tag, taxa = "species", method = "prop", tra
                        viz = NULL, x = NULL) {
   
   types <- c("raw", "engineering", "training", "validation", "final")
-  plots <- c("spatial", "xy", "bubble", "boxplot", "histogram")
+  plots <- c("spatial", "xy", "bubble", "boxplot", "histogram", "barplot")
   taxas <- c("species", "genera")
   methods <- c("prop", "partial_fit", "global_fit")
   

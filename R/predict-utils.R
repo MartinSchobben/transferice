@@ -4,7 +4,7 @@ impute_taxa <- function(
     new_data, 
     out, 
     return_type = "percent", 
-    exclude = c("hole_id", "sample_id", "longitude", "latitude", "sample_depth_mbsf")
+    exclude = meta
   ) {
   
   # get model
@@ -26,7 +26,6 @@ impute_taxa <- function(
   lgl_nm <- new_nm %in% train_nm
   
   if (return_type == "percent") {
-    
     
     # percent taxa present in training set
     sum(lgl_nm) / length(train_nm) * 100
@@ -76,23 +75,20 @@ reduce_taxa <- function(obj, new_data) {
 }
 
 
-age_finder <- function(depth) {
+age_finder <- function(new_data) {
   
   # connection
   nsb <- NSBcompanion::nsbConnect("guest", "arm_aber_sexy")
   
-  # add age
-  connect_age(depth, nsb)
+  # unique event name
+  id <- dplyr::pull(new_data, .data$site_hole) |> unique() |> stringr::str_replace("-", "_")
+  dplyr::mutate(
+    new_data, 
+    age_ma = NSBcompanion::findAge(nsb, id, depth_mbsf = .data$sample_depth_mbsf)$age_ma
+  )  |> 
+    tidyr::drop_na(age_ma)
   
 }
 
-
-connect_age <- function(data, conn) {
-  # unique event name
-  id <- dplyr::pull(data, hole_id) |> unique()
-  dplyr::mutate(
-    data, 
-    age_ma = NSBcompanion::findAge(conn, id, depth_mbsf = sample_depth_mbsf)$age_ma)
-}
 
 

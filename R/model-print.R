@@ -15,7 +15,8 @@ print_model.mc_split <- function(
     pred = NULL,
     tune = NULL,
     out = NULL,
-    exclude = c("sample_id", "hole_id", "longitude", "latitude")
+    spat = NULL,
+    exclude = c("sample_id", "hole_id", "longitude", "latitude", "sample_depth_mbsf", "site_hole", "source_citation")
   ) {
   
   # number of outcome
@@ -43,13 +44,27 @@ print_model.mc_split <- function(
   ops <- paste("<b>operations</b>: <br/> <br/> ", ops, collapse = "")
   
   # model component
-  mdl <-paste("<b>model</b>: <br/> <br/> $Y = \\beta_{0} + \\beta_{1} X + \\epsilon$", 
-              sep = "<br/> <br/>")
+  mdl <- "<b>model</b>: <br/> <br/> $Y = X \\beta + \\epsilon$"
+  
+  # error component
+  vc_err <- c(
+    spherical = "1−(1−1.5(d/ρ)+0.5(d/ρ)^{3})I(d<ρ)", 
+    exponential = "1−e^{−D/ρ}", 
+    gaussian = "1−e^{−(D/ρ)^{2}}", 
+    linear = "1−(1−D/ρ)I(d<ρ)", 
+    rational = "(d/ρ)^{2}/(1+(d/ρ)^{2})"
+  )
+  if (isTruthy(spat)) {
+    spat <- vc_err[spat]
+  } else {
+    spat <- 0
+  }
+  err <- paste0("$cor(\\epsilon) = ", spat ,"$")
   
   # print with mathjax
   tagList(
     tags$br(),
-    withMathJax(HTML(paste(out, pred, ops, mdl, sep = "<br/> <br/> "))),
+    withMathJax(HTML(paste(out, pred, ops, mdl, err, sep = "<br/> <br/> "))),
     tags$br(),
     tags$br(),
     HTML("<b>Click on the button 'Train model' to proceed</b>.")
@@ -63,52 +78,14 @@ print_model.tune_results  <- function(
     workflow, 
     pred = NULL,
     tune = NULL,
-    out = NULL,
-    height = NULL,
-    width = NULL,
-    id = character(0)
+    out = NULL
  ) {
  
-  # predictor variable
-  x <- pred_check(obj, pred, tune)
-  
-  # fitted data requires a species name variable selection
-  if (isTruthy(tune))  {
-    
-    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
-      dplyr::mutate(
-        var = .data$num_comp,
-        slct = dplyr::if_else(.data$num_comp == tune, TRUE, FALSE)
-      ) 
-     
-  } else {
-  # tuned data requires a dimension variable selection   
-    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
-      dplyr::mutate(var = 1, slct = 1)  
-        
-  }
-  
-
-  workflow_specs <- sanitize_workflow(workflow)
-  # file name
-  if (length(unique(obj$var)) != 1) viz <- "boxplot" else viz <- "histogram"
-  file_name <- file_namer("png", "training", id, trans = workflow_specs, 
-                          viz = viz, x = x)
-  
-  # boxplot of model RMSE
-  ggperformance(obj) |> 
-      app_caching(type = "png", file_name = file_name, width = width, height = height)
   
   # plot and print with mathjax
   tagList(    
-    tags$br(),
-    tags$br(), 
-    tags$div(
-      tags$img(src = fs::path("img", file_name, ext = "png")), 
-      style="text-align: center;"
-    ),
-    tags$br(),
-    tags$br(), 
+    # tags$br(),
+    # tags$br(), 
     withMathJax(
       HTML(
         paste0(
@@ -117,7 +94,9 @@ print_model.tune_results  <- function(
           "another model.</b>"
         )
       )
-    )
+    ),
+    tags$br(),
+    tags$br()
   )
 }
 #' @rdname print_model
@@ -138,12 +117,31 @@ print_model.last_fit  <- function(
   # c <- print_metric(mts, "rmsre")
   # all <- paste(a, b, c, sep = "<br/><br/>")
   # print with mathjax
-  withMathJax(HTML(paste0("<br/> <br/> <b>model fit metrics</b>: <br/> <br/>", b)))
+  withMathJax(HTML(paste0("<br/> <br/> <b>model fit metrics</b>: <br/> <br/>", b, "<br/> <br/>")))
   
 }
 
 
-ggperformance <- function(obj) {
+ggperformance <- function(obj, pred = NULL, tune = NULL) {
+  
+  # predictor variable
+  x <- pred_check(obj, pred, tune)
+  
+  # fitted data requires a species name variable selection
+  if (isTruthy(tune))  {
+    
+    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
+      dplyr::mutate(
+        var = .data$num_comp,
+        slct = dplyr::if_else(.data$num_comp == tune, TRUE, FALSE)
+      ) 
+    
+  } else {
+    # tuned data requires a dimension variable selection   
+    obj <- tune::collect_metrics(obj, summarize = FALSE) |>
+      dplyr::mutate(var = 1, slct = 1)  
+    
+  }
   
   if (length(unique(obj$var)) != 1) {
     p <- ggplot2::ggplot(
@@ -167,6 +165,6 @@ ggperformance <- function(obj) {
   }
   
   p + transferice_theme()
-  
+
 
 } 

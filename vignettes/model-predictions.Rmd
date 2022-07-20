@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-library(transferice)
+# library(transferice)
 ```
 
 # Data resampling and feature engineering
@@ -24,20 +24,22 @@ library(transferice)
 library(recipes)
 library(rsample)
 library(dplyr)
+
+set.seed(2)
 # splitting
-dinodat_split <- initial_split(dinodat, prop = 0.75, strata = "latitude")
+modern_split <- initial_split(modern, prop = 0.8, strata = "latitude")
 # training
-dinodat_train <- training(dinodat_split)
+modern_train <- training(modern_split)
 # testing
-dinodat_test <- testing(dinodat_split)
+modern_test <- testing(modern_split)
 
 # variables
-vars <- role_organizer(dinodat, "t_an")
+vars <- role_organizer(modern, "t_an")
 # taxa
 txa <- vars[names(vars) == "predictor"] |> unname()
 
 # recipe
-rcp <- recipe(x = dinodat, vars = vars, roles = names(vars)) |> 
+rcp <- recipe(x = modern, vars = vars, roles = names(vars)) |> 
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
@@ -80,7 +82,7 @@ library(tune)
 library(yardstick)
 
 # fixed formula
-fx <- formula_parser(dinodat, "t_an", exclude = c("longitude", "latitude"))
+fx <- formula_parser(modern, "t_an", exclude = c("longitude", "latitude"))
   
 # workflow
 gls_wfl <- workflow() |> 
@@ -88,8 +90,9 @@ gls_wfl <- workflow() |>
   add_model(gls_spec, formula = fx) 
 
 # multiple cross validation
-dinodat_cv <- vfold_cv(
-  training(dinodat_split), 
+set.seed(3)
+modern_cv <- vfold_cv(
+  training(modern_split), 
   v = 10, 
   strata = "latitude"
 )
@@ -101,9 +104,9 @@ tune_grid <- dials::grid_regular(
 )
 
 # tuning
-dinodat_tune <- tune::tune_grid(
+modern_tune <- tune::tune_grid(
   gls_wfl,
-  resamples = dinodat_cv,
+  resamples = modern_cv,
   grid = tune_grid,
   metrics = yardstick::metric_set(yardstick::rmse)
 )
@@ -111,7 +114,7 @@ dinodat_tune <- tune::tune_grid(
 
 ```{r out}
 library(ggplot2)
-collect_metrics(dinodat_tune, summarize = FALSE) |> 
+collect_metrics(modern_tune, summarize = FALSE) |> 
   ggplot(aes(x = num_comp, y = .estimate, group = num_comp)) +
   geom_boxplot()
 ```
@@ -131,7 +134,7 @@ mts <- yardstick::metric_set(
 )
 
 # fit the final model (does not need to be tuned)
-final <- tune::last_fit(gls_wfl, split = dinodat_split, metrics = mts)
+final <- tune::last_fit(gls_wfl, split = modern_split, metrics = mts)
 ```
 
 ```{r check}
@@ -142,16 +145,16 @@ ggpartial(final, gls_wfl, pred = "taxa_2", out = "t_an", type = "bubble")
 
 ```{r predict, options}
 # finalized workflow fitted on all data
-final_fit <- fit(gls_wfl, data = dinodat)
+final_fit <- fit(gls_wfl, data = select(modern, -age_ma))
 
 # new recipe
 # variables
-vars <- role_organizer(fossil_dinodat, NULL)
+vars <- role_organizer(fossil, NULL)
 # taxa
 txa <- vars[names(vars) == "predictor"] |> unname()
 
 # recipe
-rcp <- recipe(x = fossil_dinodat, vars = vars, roles = names(vars)) |> 
+rcp <- recipe(x = fossil, vars = vars, roles = names(vars)) |> 
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
@@ -159,24 +162,23 @@ rcp <- recipe(x = fossil_dinodat, vars = vars, roles = names(vars)) |>
   # reduce dimensions (with 4 dims)
   step_pca(dplyr::any_of(txa), num_comp = 4) |> 
   # update spatial to predictor
-  update_role(longitude, latitude, new_role = "predictor")
+  update_role(longitude, latitude, new_role = "predictor") 
 
 # extract model
 final_mdl <- final_fit |> extract_fit_parsnip()
 
 # bake fossil data
-fossil_dinodat_prepped <- prep(rcp, training = fossil_dinodat) |> 
-  bake(new_data = NULL)
+fossil_prepped <- prep(rcp, training = fossil) |> 
+    bake(new_data = NULL)
 
 # predict on new data
-pred <- predict(final_mdl, new_data = fossil_dinodat_prepped)
+pred <- predict(final_mdl, new_data = fossil_prepped)
 
 # add to original data
-fossil_temperature <- bind_cols(fossil_dinodat, pred) |> 
-  left_join(fossil_dinodat_meta, by = "sample_id")
+fossil_pred <- bind_cols(fossil, pred)
 
 # timeplot
-ggplot(fossil_temperature, aes(x = Age_Ma, y = .pred)) +
+ggplot(fossil_pred, aes(x = age_ma, y = .pred)) +
   geom_point() +
   geom_line() +
   scale_x_reverse() +

@@ -105,7 +105,7 @@ ggpartial.tune_results <- function(
     
     # exclude from predicted values
     if(stringr::str_detect(id, "gls")) {
-      exclude <- syms(c("longitude", "latitude"))
+      exclude <- rlang::syms(c("longitude", "latitude"))
     }
     
   }

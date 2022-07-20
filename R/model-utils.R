@@ -2,25 +2,29 @@ role_organizer <- function(
     dat, 
     outcome, 
     group = c("sample_id", "hole_id"), 
-    temporal = c("sample_depth_mbsf"), 
+    temporal = c("sample_depth_mbsf", "age_ma"), 
     spatial = c("longitude", "latitude"),
+    meta = c("site_hole", "source_citation"),
     aliases = NULL
   ) {
-  
+
   # variables
-  txa <- colnames(dat)[!colnames(dat) %in% c(outcome, group, temporal, spatial)] # taxa
+  txa <- colnames(dat)[!colnames(dat) %in% c(outcome, group, temporal, spatial, meta)] # taxa
   # aliases for taxa
   if (!is.null(aliases)) {
     txa <- paste0(aliases, seq_along(txa)) 
   } 
   
   # roles
-  c(outcome = outcome) |> 
-    append(setNames(txa, rep("predictor", length(txa)))) |> 
-    append(setNames(spatial, rep("spatial", length(spatial)))) |> 
-    append(setNames(group, rep("group", length(group)))) |> 
-    append(setNames(temporal, rep("temporal", length(temporal)))) 
+  vars <- c(outcome = outcome) |> 
+    append(setNames(txa, rep("predictor", length(txa)))) 
   
+  if (!is.null(spatial)) vars <- append(vars, setNames(spatial, rep("spatial", length(spatial))))  
+  if (!is.null(group)) vars <- append(vars, setNames(group, rep("group", length(group))))  
+  if (!is.null(temporal)) vars <- append(vars, setNames(temporal, rep("temporal", length(temporal))))  
+  if (!is.null(meta)) vars <- append(vars, setNames(meta, rep("meta", length(meta)))) 
+  
+  vars
 }
 # dat = dataset
 # parms = oceanographic parameters

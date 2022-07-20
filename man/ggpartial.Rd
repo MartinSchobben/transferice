@@ -16,7 +16,6 @@ ggpartial(obj, ...)
   pred = NULL,
   tune = NULL,
   type = "xy",
-  base_map = NULL,
   return_type = "plot",
   id
 )
@@ -28,22 +27,12 @@ ggpartial(obj, ...)
   pred = NULL,
   tune = NULL,
   type = "xy",
-  base_map = NULL,
   plot_type = "dynamic",
   id = NULL,
   mc_cores = 2
 )
 
-\method{ggpartial}{last_fit}(
-  obj,
-  workflow,
-  out,
-  pred = NULL,
-  tune = NULL,
-  type = "xy",
-  base_map = NULL,
-  id
-)
+\method{ggpartial}{last_fit}(obj, workflow, out, pred = NULL, tune = NULL, type = "xy", id)
 }
 \arguments{
 \item{obj}{Rsample mc_split object or tune tune_results object.}

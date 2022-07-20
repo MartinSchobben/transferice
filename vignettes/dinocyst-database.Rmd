@@ -1,5 +1,5 @@
 ---
-title: "dinocystDB"
+title: "dinocyst database"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{dinocystDB}
@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setupRMD}
-#install.packages("here")
-here::i_am("vignettes/dinocystDB.Rmd")
+library(here)
+i_am("vignettes/dinocyst-database.Rmd")
 ```
 
 Setting-up a SQLite database for the IODP sample locations.
@@ -33,177 +33,123 @@ sqlite3
 # Connect to database from R
 
 ```{r connect}
-# install.packages("RSQLite")
-# install.packages("DBI")
-# path to db
+# path to database
 dbpath <- fs::path_package(package = "transferice", "extdata", "transferice.sqlite")
-con <- DBI::dbConnect(
-  RSQLite::SQLite(), 
-  dbpath 
-  )
+con <- DBI::dbConnect(RSQLite::SQLite(), dbpath)
 ```
 
 # Write tables to database
 
 ## Dinocyst count data
 
-```{r count}
-# install.packages("readxl") # reading excel
-# install.packages("tibble") # tibble data structure
-# install.packages("janitor") # cleaning variable names
-# install.packages("dplyr") # data wrangling
-# metadata
-meta <- c("station", "depth", "weight", "lycopodium", "lyc_tab", "geometry", 
-          "contributors", "longitude", "latitude", "dino_tot")
+First we collect dinocyst count data from a number of external sources.
 
-shts <- readxl::excel_sheets(here::here("data-raw/SurfaceDinos.xlsx"))
+```{r count}
+library(readxl) # reading excel
+library(tibble) # tibble data structure
+library(janitor) # cleaning variable names
+library(dplyr) # data wrangling
+library(tidyr) # tidying data
+
+# metadata
+meta_vc <- c("sample_age_ma", "sample_id", "longitude", "latitude", "source_id", 
+             "site", "hole", "sample_depth_mbsf", "site_hole", 
+             "source_citation")
+
+# the sheets of the excel workbook
+shts <- excel_sheets(here("data-raw/SurfaceDinos.xlsx"))
 
 # read dinocyst data (Thole 2021)
-dino_thole <- readxl::read_xlsx(
-  here::here("data-raw/SurfaceDinos.xlsx"), 
+dino_thole <- read_xlsx(
+  here("data-raw/SurfaceDinos.xlsx"), 
   sheet = shts[1],
   # explicit type casting is important
   col_types = c("text", rep("numeric", 38))
 ) |> 
   # clean variable names
-  janitor::clean_names() |> 
-  tibble::add_column(contributors = "Thole et al 2022") |> 
-  dplyr::select(-.data$non_quat_dinos)
+  clean_names() |>  
+  # sufrace sample
+  mutate(sample_depth_mbsf = 0) |> 
+  add_column(source_citation = "Thole et al 2022") |> 
+  select(-c(non_quat_dinos, depth, weight, lycopodium, lyc_tab), site_hole = station)
 
 # read dinocyst data (Marret 2019)
-dino_marret <- readxl::read_xlsx(
-  here::here("data-raw/SurfaceDinos.xlsx"), 
+dino_marret <- read_xlsx(
+  here("data-raw/SurfaceDinos.xlsx"), 
   sheet = shts[3],
   # explicit type casting is important
   col_types = c("text", "numeric", "numeric", "text", rep("numeric", 92))
 )  |>  
+  # sufrace sample
+  mutate(sample_depth_mbsf = 0) |> 
   # clean variable names
-  janitor::clean_names() |> 
-  dplyr::select(-.data$dino_tot)
-
-# combine both dinocyst count datasets
-dino_all <- dplyr::bind_rows(dino_marret, dino_thole) |> 
-  dplyr::mutate(sample_id = dplyr::row_number(), .before = "station")
-
-# remove all NA rows
-dino_all <- dplyr::filter(
-  dino_all, 
-  !dplyr::if_all(-dplyr::any_of(meta), ~is.na(.))
-)
-
-# extract dino count data
-dino_cnt <- dplyr::select(dino_all, -dplyr::any_of(meta))
-# extract dino names
-dino_nms <- tibble::tibble(
-  species = names(dino_cnt)[names(dino_cnt) != "sample_id"]
-) |> 
-  dplyr::mutate(taxon_id = dplyr::row_number(), .before = "species")
-
-# nsb long format
-dino_cnt <- tidyr::pivot_longer(
-  dino_cnt, 
-  -sample_id, 
-  names_to = "taxon_id", 
-  values_to = "taxon_abundance", 
-  values_drop_na = TRUE
-) |> 
-  # code taxon id
-  dplyr::mutate(
-    taxon_id =  
-      dplyr::recode(
-        taxon_id, 
-        !!!setNames(dino_nms$taxon_id, nm = dino_nms$species)
-      )
-  )
-
-# to database (NSB neptune_sample_taxa)
-DBI::dbWriteTable(con, "neptune_sample_taxa", dino_cnt, overwrite = TRUE)
+  clean_names() |> 
+  select(-dino_tot) |> 
+  rename(source_citation = contributors, site_hole = station)
 ```
 
-# Locations
+Fossil data is extracted from the Pangaea database with `pangaear`.
 
-```{r locations}
-# extract geographic information
-dino_loc <- dplyr::select(dino_all, site_hole = .data$station, .data$longitude, 
-                          .data$latitude) |> 
-  dplyr::distinct(.data$site_hole, .keep_all = TRUE) |> 
-  dplyr::mutate(hole_id = dplyr::row_number(), .before = "site_hole")
+```{r pangaear}
+library(pangaear) # connect to the Pangaea database
+library(purrr) # vectorised operations
+library(stringr) # regex
 
-# to database (NSB neptune_hole_summary)
-DBI::dbWriteTable(con, "neptune_hole_summary", dino_loc, overwrite = TRUE)
-```
+# get data
+dino_brinkhuis_raw <- pg_data("10.1594/PANGAEA.779869") 
 
-# Sample metadata
-
-```{r sample}
-# sample metadata selected
-dino_smp <- dplyr::select(
-  dino_all, 
-  dplyr::any_of(c("sample_id", meta[!meta %in% c("longitude", "latitude")]))
-) |> 
-  # code hole_id
-  dplyr::mutate(
-    hole_id =  
-      dplyr::recode(
-        .data$station, 
-        !!! setNames(dino_loc$hole_id, nm = dino_loc$site),
-      ),
-    sample_depth_mbsf = 0
+# counts
+dino_brinkhuis <- dino_brinkhuis_raw [[1]]$data |> 
+  rename(
+    source_id = `Sample label (DSDP/ODP/IODP sample designation)`, 
+    sample_depth_mbsf = `Depth [m]`
   ) |> 
-  dplyr::select(-.data$station) # drop station
-
-dino_sty <- dplyr::distinct(dino_smp, source_citation = .data$contributors) |> 
-  dplyr::mutate(dataset_id = dplyr::row_number(), .before = "source_citation") 
-
-# lose contributors
-dino_smp <-  dplyr::select(dino_smp, -c(contributors, depth, weight, lycopodium, lyc_tab))
-
-# to database (NSB neptune_sample)
-DBI::dbWriteTable(con, "neptune_sample", dino_smp, overwrite = TRUE)
+  # not needed info
+  select(
+    -c(
+      `Acr (skolochorate; samples charact...)`, 
+      `Dinofl cyst [#] (Counting, dinoflagellate cysts)`, 
+       # remove duplicated name Hystrichokolpoma sp. 
+      `Hystrichokolpoma sp. [#] (cf. Homotryblium oceancium; o...)`,
+      `Palyn ter [%]`, 
+      `Palyn mar [%]`
+    )
+  )|> 
+  mutate(
+    sample_id = row_number(),
+    longitude = 144.412700,
+    latitude = -42.609680,
+    sample_age_ma = `Age model [ka]` / 1000,
+    source_citation = "Brinkhuis et al., 2003",
+    .keep = "unused"
+  ) |> 
+  separate(source_id, into = c("site", "hole", "source_id"), sep = "-", 
+           remove = FALSE, extra = "merge", fill = "right") |> 
+  mutate(site_hole = paste(site, hole, sep = "-")) |>
+  # clean dinocysts taxons
+  rename_with(~str_remove(.x, "(?<=\\[#\\])(.)*")) |> 
+  rename_with(~str_trim(str_remove(.x, "\\[#\\]")))
 ```
 
-
-# Study metadata
-
-The original units used for reporting the dinocyst data.
-
-```{r units, eval = FALSE}
-# from pdf table Marret et al 2020 with Okular
-dino_sty <- clipr::read_clip_tbl() |>  
-  # clean variable names
-  janitor::clean_names()
-
-# add units Thole et al
-dino_sty <- dplyr::add_row(dino_sty,
-    location = "Southern hemisphere",
-    available_data = "Raw Counts",
-    references = "Thole et al 2022"
-  )
-
-# write table to DB
-DBI::dbWriteTable(con, "dino_sty", dino_sty)
-```
-
-# Species list
+Recode taxon names
 
 ```{r species}
-# install.packages("stringr")
 
 # read taxon list (Thole et al)
-taxons_thole <- readxl::read_xlsx(
-  here::here("data-raw/SurfaceDinos.xlsx"), 
+taxons_thole <- read_xlsx(
+  here("data-raw/SurfaceDinos.xlsx"), 
   sheet = shts[4],
   col_names = c("x", "name", "abbrev", "other")
 ) 
 
 # subspecies of Selenopemphix antarctica (manual) and clean names
-taxons_thole <- dplyr::mutate(
+taxons_thole <- mutate(
   taxons_thole, 
   abbrev = tolower(gsub("[^[:alnum:]]+", "", .data$abbrev)),
-  name = dplyr::if_else(.data$abbrev == "sant", "Selenopemphix antarctica sp1", .data$name),
+  name = if_else(.data$abbrev == "sant", "Selenopemphix antarctica sp1", .data$name),
   name = gsub("Cyst of ", "", .data$name)
 ) |> 
-  dplyr::add_row(abbrev = "sant_2", name = "Selenopemphix antarctica sp2") 
+  add_row(abbrev = "sant_2", name = "Selenopemphix antarctica sp2") 
 
 # manual addition from Marret
 taxons_marret <- c(
@@ -237,22 +183,81 @@ taxons_marret <- c(
   `Protoperidium minutum` = "pmin",
   `Melitasphaeridium choanophorum` = "mcho"
 )
-taxon_nms <- append(
-  setNames(taxons_thole$name, nm = taxons_thole$abbrev), 
-  setNames(names(taxons_marret), taxons_marret)
+
+# get full dinocyst names
+taxons_brinkhuis <- dino_brinkhuis_raw[[1]]$metadata$parameters[11:134] |> 
+  map_chr(list(1))
+
+# filter for names and clean them
+nms <- taxons_brinkhuis[str_detect(taxons_brinkhuis, "#")] |> 
+  map(~str_split(.x, "\\[#\\]")) |> 
+  flatten()
+
+# abbreviations
+abbr <- map_chr(nms, list(2)) |> 
+  str_remove_all("[\\(\\)]") |> 
+  str_trim()
+
+clean_nms <- map_chr(nms, list(1)) |> 
+  str_trim()
+
+# all names combined in named vector
+taxon_nms <- set_names(taxons_thole$abbrev, nm = taxons_thole$name) |> 
+  append(set_names(taxons_marret, nm = names(taxons_marret))) |> 
+  append(set_names(abbr, nm = clean_nms))
+```
+
+Now we are going to combine the data from these three sources
+
+````{r all}
+# combine both dinocyst count datasets
+dino_all <- list(dino_marret, dino_thole, dino_brinkhuis) |> 
+  map(~rename(.x, any_of(taxon_nms))) |> 
+  bind_rows() |> 
+  mutate(sample_id = row_number(), .before = "site_hole")
+
+# remove all NA rows
+dino_all <- filter(dino_all, !if_all(-any_of(meta_vc), ~is.na(.)))
+
+# extract dino count data
+dino_cnt <- select(dino_all, -any_of(meta_vc[meta_vc != "sample_id"]))
+
+# extract dino names
+dino_nms <- tibble(species = names(dino_cnt)[names(dino_cnt) != "sample_id"]) |> 
+  mutate(taxon_id = row_number(), .before = "species")
+
+# nsb long format
+dino_cnt <- pivot_longer(
+  dino_cnt, 
+  -sample_id, 
+  names_to = "taxon_id", 
+  values_to = "taxon_abundance", 
+  values_drop_na = TRUE
+) |> 
+  # code taxon id
+  mutate(
+    taxon_id =  
+      recode(
+        taxon_id, 
+        !!!set_names(dino_nms$taxon_id, nm = dino_nms$species)
+      )
   )
 
+# to database (NSB neptune_sample_taxa)
+DBI::dbWriteTable(con, "neptune_sample_taxa", dino_cnt, overwrite = TRUE)
+```
+
+# taxon list
+
+```{r taxonlist}
 # recode taxons
-dino_nms <- dplyr::mutate(
-  dino_nms,  
-  species = dplyr::recode(.data$species, !!!taxon_nms)
-) |> 
-  tidyr::separate(
-    species, 
-    sep = " ", 
-    into = c("genus", "species", "add"),  
-    extra = "merge", 
-    fill = "right"
+dino_nms <- tidyr::separate(
+   dino_nms,
+   species, 
+   sep = " ", 
+   into = c("genus", "species", "add"),  
+   extra = "merge", 
+   fill = "right"
   ) |> 
    tidyr::separate(
     add, 
@@ -260,18 +265,69 @@ dino_nms <- dplyr::mutate(
     into = c("subspecies", "species_author"),
     extra = "merge", 
     fill = "right"
-  ) |> 
-  dplyr::mutate(
-    species = 
-      dplyr::if_else(
-        stringr::str_detect(.data$species, "^spp|^sp"), 
-        NA_character_, 
-        .data$species
-    )
-  )
+  ) 
 
 # write table to DB (NSB neptune_taxonomy)
 DBI::dbWriteTable(con, "neptune_taxonomy", dino_nms, overwrite = TRUE)
+```
+
+# Locations
+
+```{r locations}
+# extract geographic information
+dino_loc <- select(dino_all, site_hole, site, hole, longitude, latitude) |> 
+  distinct(site_hole, .keep_all = TRUE) |> 
+  mutate(hole_id = row_number(), .before = "site_hole")
+
+# to database (NSB neptune_hole_summary)
+DBI::dbWriteTable(con, "neptune_hole_summary", dino_loc, overwrite = TRUE)
+```
+
+# Study metadata
+
+```{r sample}
+# sample metadata selected
+dino_smp <- select(
+  dino_all, 
+  any_of(c("sample_id", meta_vc[!meta_vc %in% c("longitude", "latitude",  "site",  "hole")]))
+) |> 
+  # code hole_id
+  mutate(
+    hole_id =  
+      recode(
+        site_hole, 
+        !!! set_names(dino_loc$hole_id, nm = dino_loc$site_hole),
+      )
+  ) |> 
+  select(-site_hole) # drop station/hole
+
+# metadata
+dino_sty <- distinct(dino_smp, source_citation, source_id) |> 
+  mutate(dataset_id = row_number(), .before = "source_citation") 
+
+# write table to DB
+DBI::dbWriteTable(con, "neptune_sod", dino_sty)
+```
+
+
+# Sample metadata
+
+The ..
+
+```{r units, eval = FALSE}
+# code dataset_id
+dino_smp <- mutate(
+  dino_smp,
+  dataset_id =  
+    recode(
+      source_citation, 
+      !!! set_names(dino_sty$dataset_id, nm = dino_sty$source_citation),
+    )
+) |> # lose contributors
+  select(-c(source_citation, source_id))
+
+# to database (NSB neptune_sample)
+DBI::dbWriteTable(con, "neptune_sample", dino_smp, overwrite = TRUE)
 ```
 
 

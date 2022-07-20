@@ -16,19 +16,12 @@ print_model(obj, ...)
   pred = NULL,
   tune = NULL,
   out = NULL,
-  exclude = c("sample_id", "hole_id", "longitude", "latitude")
+  spat = NULL,
+  exclude = c("sample_id", "hole_id", "longitude", "latitude", "sample_depth_mbsf",
+    "site_hole", "source_citation")
 )
 
-\method{print_model}{tune_results}(
-  obj,
-  workflow,
-  pred = NULL,
-  tune = NULL,
-  out = NULL,
-  height = NULL,
-  width = NULL,
-  id = character(0)
-)
+\method{print_model}{tune_results}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 
 \method{print_model}{last_fit}(obj, workflow, pred = NULL, tune = NULL, out = NULL)
 }
