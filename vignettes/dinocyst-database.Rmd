@@ -109,8 +109,6 @@ dino_brinkhuis <- dino_brinkhuis_raw [[1]]$data |>
     -c(
       `Acr (skolochorate; samples charact...)`, 
       `Dinofl cyst [#] (Counting, dinoflagellate cysts)`, 
-       # remove duplicated name Hystrichokolpoma sp. 
-      `Hystrichokolpoma sp. [#] (cf. Homotryblium oceancium; o...)`,
       `Palyn ter [%]`, 
       `Palyn mar [%]`
     )
@@ -127,6 +125,7 @@ dino_brinkhuis <- dino_brinkhuis_raw [[1]]$data |>
            remove = FALSE, extra = "merge", fill = "right") |> 
   mutate(site_hole = paste(site, hole, sep = "-")) |>
   # clean dinocysts taxons
+  rename(`Homotryblium oceancium` = `Hystrichokolpoma sp. [#] (cf. Homotryblium oceancium; o...)`) |>  # remove duplicated name Hystrichokolpoma sp. 
   rename_with(~str_remove(.x, "(?<=\\[#\\])(.)*")) |> 
   rename_with(~str_trim(str_remove(.x, "\\[#\\]")))
 ```

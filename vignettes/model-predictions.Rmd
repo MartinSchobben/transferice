@@ -149,15 +149,12 @@ final_fit <- fit(gls_wfl, data = modern)
 
 # new recipe
 # variables
-fossil_tx <- fossil[,c(5, 6, 9:128)]
-age_ma <- fossil$age_ma
-
-vars <- role_organizer(fossil_tx, NULL, group = NULL, temporal = NULL, meta = NULL)
+vars <- role_organizer(fossil, NULL)
 # taxa
 txa <- vars[names(vars) == "predictor"] |> unname()
 
 # recipe
-rcp <- recipe(x = fossil_tx, vars = vars, roles = names(vars)) |> 
+rcp <- recipe(x = fossil, vars = vars, roles = names(vars)) |> 
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
@@ -169,7 +166,7 @@ rcp <- recipe(x = fossil_tx, vars = vars, roles = names(vars)) |>
 final_mdl <- final_fit |> extract_fit_parsnip()
 
 # bake fossil data
-fossil_prepped <- prep(rcp, training = fossil_tx) |> 
+fossil_prepped <- prep(rcp, training = fossil) |> 
     bake(new_data = NULL)
 
 # predict on new data
