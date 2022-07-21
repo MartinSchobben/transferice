@@ -16,7 +16,7 @@ print_model.mc_split <- function(
     tune = NULL,
     out = NULL,
     spat = NULL,
-    exclude = c("sample_id", "hole_id", "longitude", "latitude", "sample_depth_mbsf", "site_hole", "source_citation")
+    exclude = meta
   ) {
   
   # number of outcome

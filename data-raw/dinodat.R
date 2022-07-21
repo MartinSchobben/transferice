@@ -17,15 +17,13 @@ locs <- dplyr::select(dino_prop, longitude, latitude)
 parms <- c("temperature", "phosphate", "nitrate", "silicate", "oxygen", 
            "salinity", "density")
 
-# save parameter names
-usethis::use_data(parms, overwrite = TRUE)
 
 # meta
 meta <- c("sample_id", "sample_depth_mbsf", "hole_id", "site_hole", 
-           "source_citation", "longitude", "latitude", "age_ma")
+           "longitude", "latitude", "source_citation", "age_ma")
 
 # save parameter names
-usethis::use_data(meta, overwrite = TRUE)
+usethis::use_data(parms, meta, internal = TRUE, overwrite = TRUE)
 
 # get NOAA annually averaged data for parameters on a 1 degree grid 
 dt  <- oceanexplorer::get_NOAA("temperature", 1, "annual")
@@ -42,7 +40,7 @@ parms <- oceanexplorer::filter_NOAA(dt, depth = 30,  coord = pts) |>
 environ_dat <- dplyr::bind_cols(locs, parms) 
 
 # save data
-usethis::use_data(environ_dat , overwrite = TRUE)
+# usethis::use_data(environ_dat , overwrite = TRUE)
 
 # ------------------------------------------------------------------------------
 # dinocysts

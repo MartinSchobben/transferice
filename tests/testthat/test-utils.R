@@ -1,3 +1,20 @@
+test_that("SQL query correctly transforms data", {
+  
+  # path
+  dbpath <- fs::path_package(package = "transferice", "extdata", 
+                             "transferice.sqlite")
+  
+  # connection
+  con <- DBI::dbConnect(drv = RSQLite::SQLite(), dbname = dbpath)
+  
+  sql <- calc_taxon_prop(con)
+  
+  expect_equal(sql, test_set, tolerance =  0.000001)
+  
+  on.exit(DBI::dbDisconnect(con))
+})
+
+
 test_that("rows add to 1", {
   
   # path
@@ -14,7 +31,7 @@ test_that("rows add to 1", {
       dplyr::rowwise() |> 
       dplyr::mutate(
         dino_tot = 
-          sum(dplyr::c_across(-c(sample_id, hole_id, sample_depth_mbsf, site_hole, source_citation, longitude, latitude)), na.rm = TRUE),
+          sum(dplyr::c_across(-dplyr::any_of(tranferice:::meta)), na.rm = TRUE),
         ) |> 
       dplyr::pull(.data$dino_tot) |> 
       chk()

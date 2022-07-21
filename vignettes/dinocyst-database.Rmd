@@ -67,11 +67,11 @@ dino_thole <- read_xlsx(
   col_types = c("text", rep("numeric", 38))
 ) |> 
   # clean variable names
-  clean_names() |>  
-  # sufrace sample
-  mutate(sample_depth_mbsf = 0) |> 
+  clean_names() |> 
   add_column(source_citation = "Thole et al 2022") |> 
-  select(-c(non_quat_dinos, depth, weight, lycopodium, lyc_tab), site_hole = station)
+  select(-c(non_quat_dinos, depth, weight, lycopodium, lyc_tab), site_hole = station)  |>  
+  # sufrace sample
+  mutate(sample_depth_mbsf = 0, .before = "site_hole")
 
 # read dinocyst data (Marret 2019)
 dino_marret <- read_xlsx(
@@ -79,13 +79,13 @@ dino_marret <- read_xlsx(
   sheet = shts[3],
   # explicit type casting is important
   col_types = c("text", "numeric", "numeric", "text", rep("numeric", 92))
-)  |>  
-  # sufrace sample
-  mutate(sample_depth_mbsf = 0) |> 
+) |> 
   # clean variable names
   clean_names() |> 
   select(-dino_tot) |> 
-  rename(source_citation = contributors, site_hole = station)
+  rename(source_citation = contributors, site_hole = station) |>  
+  # sufrace sample
+  mutate(sample_depth_mbsf = 0, .before = "site_hole") 
 ```
 
 Fossil data is extracted from the Pangaea database with `pangaear`.
@@ -125,7 +125,10 @@ dino_brinkhuis <- dino_brinkhuis_raw [[1]]$data |>
            remove = FALSE, extra = "merge", fill = "right") |> 
   mutate(site_hole = paste(site, hole, sep = "-")) |>
   # clean dinocysts taxons
-  rename(`Homotryblium oceancium` = `Hystrichokolpoma sp. [#] (cf. Homotryblium oceancium; o...)`) |>  # remove duplicated name Hystrichokolpoma sp. 
+  rename(
+    `Homotryblium oceancium` = 
+      `Hystrichokolpoma sp. [#] (cf. Homotryblium oceancium; o...)`
+    ) |>  # remove duplicated name Hystrichokolpoma sp. 
   rename_with(~str_remove(.x, "(?<=\\[#\\])(.)*")) |> 
   rename_with(~str_trim(str_remove(.x, "\\[#\\]")))
 ```
@@ -145,7 +148,8 @@ taxons_thole <- read_xlsx(
 taxons_thole <- mutate(
   taxons_thole, 
   abbrev = tolower(gsub("[^[:alnum:]]+", "", .data$abbrev)),
-  name = if_else(.data$abbrev == "sant", "Selenopemphix antarctica sp1", .data$name),
+  name = 
+    if_else(.data$abbrev == "sant", "Selenopemphix antarctica sp1", .data$name),
   name = gsub("Cyst of ", "", .data$name)
 ) |> 
   add_row(abbrev = "sant_2", name = "Selenopemphix antarctica sp2") 
@@ -213,6 +217,8 @@ Now we are going to combine the data from these three sources
 dino_all <- list(dino_marret, dino_thole, dino_brinkhuis) |> 
   map(~rename(.x, any_of(taxon_nms))) |> 
   bind_rows() |> 
+  # sort taxa alphabetically 
+  select(any_of(meta), sort(names(taxon_nms))) |> 
   mutate(sample_id = row_number(), .before = "site_hole")
 
 # remove all NA rows
@@ -246,18 +252,6 @@ dino_cnt <- pivot_longer(
 DBI::dbWriteTable(con, "neptune_sample_taxa", dino_cnt, overwrite = TRUE)
 ```
 
-```{r manual, options}
-fossil2 <- dino_brinkhuis |> 
-  rename(set_names(abbr, nm = clean_nms)) |> 
-  rowwise() |> 
-  mutate(tot = sum(c_across(any_of(clean_nms)))) |> 
-  ungroup() |> 
-  mutate(across(any_of(clean_nms), ~.x / tot), hole_id = 90999, age_ma = 0) |> 
-  select(-c(tot, sample_age_ma,source_id, site, hole)) |> 
-  tidyr::drop_na() |> 
-  age_finder()
-```
-
 # taxon list
 
 ```{r taxonlist}
@@ -266,14 +260,14 @@ dino_nms <- tidyr::separate(
    dino_nms,
    species, 
    sep = " ", 
-   into = c("genus", "species", "add"),  
+   into = c("genus", "species"),  
    extra = "merge", 
    fill = "right"
   ) |> 
    tidyr::separate(
-    add, 
+    species, 
     sep = "sensu", 
-    into = c("subspecies", "species_author"),
+    into = c("species", "species_author"),
     extra = "merge", 
     fill = "right"
   ) 
@@ -286,7 +280,7 @@ DBI::dbWriteTable(con, "neptune_taxonomy", dino_nms, overwrite = TRUE)
 
 ```{r locations}
 # extract geographic information
-dino_loc <- select(dino_all, site_hole, site, hole, longitude, latitude) |> 
+dino_loc <- select(dino_all, site_hole, longitude, latitude) |> 
   distinct(site_hole, .keep_all = TRUE) |> 
   mutate(hole_id = row_number(), .before = "site_hole")
 
@@ -313,11 +307,11 @@ dino_smp <- select(
   select(-site_hole) # drop station/hole
 
 # metadata
-dino_sty <- distinct(dino_smp, source_citation, source_id) |> 
+dino_sty <- distinct(dino_smp, source_citation) |> 
   mutate(dataset_id = row_number(), .before = "source_citation") 
 
 # write table to DB
-DBI::dbWriteTable(con, "neptune_sod", dino_sty)
+DBI::dbWriteTable(con, "neptune_sod", dino_sty, overwrite = TRUE)
 ```
 
 
@@ -325,7 +319,7 @@ DBI::dbWriteTable(con, "neptune_sod", dino_sty)
 
 The ..
 
-```{r units, eval = FALSE}
+```{r units}
 # code dataset_id
 dino_smp <- mutate(
   dino_smp,
@@ -335,7 +329,7 @@ dino_smp <- mutate(
       !!! set_names(dino_sty$dataset_id, nm = dino_sty$source_citation),
     )
 ) |> # lose contributors
-  select(-c(source_citation, source_id))
+  select(-c(source_citation))
 
 # to database (NSB neptune_sample)
 DBI::dbWriteTable(con, "neptune_sample", dino_smp, overwrite = TRUE)
@@ -347,3 +341,53 @@ Useful sources working with SQLite and DBconnect
 - https://www.datacamp.com/community/tutorials/beginners-guide-to-sqlite
 - https://db.rstudio.com/databases/sqlite/
 - https://db.rstudio.com/getting-started/database-queries/
+
+
+```{r test, echo=FALSE}
+# mimic the sql query
+test_set1 <- 
+  dino_cnt  |>  
+  left_join(dino_nms, by = "taxon_id") |>  
+  left_join(dino_smp, by = "sample_id") |>  
+  left_join(dino_loc, by = "hole_id")|>  
+  left_join(dino_sty , by = "dataset_id") |> 
+  select(-c(taxon_id, dataset_id, species_author)) |> 
+  group_by(sample_id) |>  
+  mutate(taxon_prop = taxon_abundance/ sum(taxon_abundance), .keep = "unused") |> 
+  ungroup()  
+
+# names
+taxa_nms <- unique(paste(test_set1$genus, test_set1$species)) |> 
+  str_trim()
+
+test_set <- unite(
+  test_set1, 
+  col = "name", 
+  .data$genus, 
+  .data$species, 
+  sep = " "
+) |>
+    mutate(
+      # tidy the names
+      name = str_trim(name),
+      # add provisional age variable
+      age_ma = NA_real_
+    ) |> 
+    pivot_wider(
+      names_from = name,
+      values_from = taxon_prop,
+      values_fill = numeric(1)
+  ) |> 
+   # sort alphabetically
+   select(any_of(meta), any_of(sort(taxa_nms))) 
+
+# # these are for internal testing
+# modern_test <- test_set |> 
+#   filter(sample_depth_mbsf == 0) |>
+#   select(where(~is.numeric(.x) && sum(.x) != 0))
+# fossil_test <- test_set |> filter(sample_depth_mbsf != 0) |>  select(any_of(meta) & where(~ sum(.) != 0))
+# 
+
+
+use_data(test_set, overwrite = TRUE)
+```

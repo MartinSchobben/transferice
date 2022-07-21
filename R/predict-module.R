@@ -50,9 +50,8 @@ predict_server <- function(id, model_id) {
   
     # new data for predicting
     new <- reactive({
-      
-      calc_taxon_prop(pool, "predict") |> 
-        tidyr::drop_na()
+
+      calc_taxon_prop(pool, "predict") |> tidyr::drop_na(-age_ma)
     })
     
     # render study selection

@@ -2,7 +2,7 @@
 # relative proportions for each sample
 calc_taxon_prop <- function(
     con, 
-    type = "train",
+    type = "all",
     count = "neptune_sample_taxa", 
     sample =  "neptune_sample", 
     taxon = "neptune_taxonomy",
@@ -10,50 +10,56 @@ calc_taxon_prop <- function(
     meta = "neptune_sod"
   ) {
   
-  if (type == "train") {
-    x <- "sample_depth_mbsf = 0 "
+  if (type == "all") {
+    x <- ";"
+  } else if (type == "train") {
+    x <- " WHERE sample_depth_mbsf = 0 ;"
   } else if (type == "predict") {
-    x <- "sample_depth_mbsf > 0 "
+    x <- " WHERE sample_depth_mbsf > 0 ;"
   }
   
   # obtain counts and make wide format
-  DBI::dbGetQuery(
+  sql_db <- DBI::dbGetQuery(
     con ,
     paste0(
       "SELECT 
         c.sample_id, 
-        s.sample_depth_mbsf,  
+        t.genus,
+        t.species,
+        s.sample_depth_mbsf,
+        s.hole_id,
+        g.site_hole,
+        g.longitude,
+        g.latitude,
+        m.source_citation,
         taxon_abundance / SUM(taxon_abundance) 
-          OVER (PARTITION BY c.sample_id) AS taxon_prop, 
-            c.taxon_id,
-            s.hole_id,
-            q.site_hole, q.longitude, q.latitude,
-            m.source_citation,
-            genus ||  
-              COALESCE(' ' || species, '') || 
-                COALESCE(' ' || subspecies, '')  AS name
+          OVER (PARTITION BY c.sample_id) AS taxon_prop
                   FROM ", count, " AS c
                     LEFT JOIN ", sample, " AS s ON c.sample_id = s.sample_id
                       LEFT JOIN ", taxon, " AS t ON c.taxon_id = t.taxon_id
-                        LEFT JOIN ", site, " AS q ON s.hole_id = q.hole_id
-                          LEFT JOIN ", meta, " AS m ON s.dataset_id = m.dataset_id
-                            WHERE ", x, ";"
+                        LEFT JOIN ", site, " AS g ON s.hole_id = g.hole_id
+                          LEFT JOIN ", meta, " AS m ON s.dataset_id = m.dataset_id",
+                            x
     )
-  ) |> 
-    # drop taxon id
-    dplyr::select(- .data$taxon_id) |> 
+  )  
+  
+  taxa_nms <- unique(paste(sql_db$genus, sql_db$species)) |> stringr::str_trim()
+ 
+  tidyr::unite(sql_db, col = "name", .data$genus, .data$species, sep = " ") |>
     dplyr::mutate(
       # tidy the names
       name = stringr::str_trim(name),
       # add provisional age variable
       age_ma = NA_real_
-      
-    ) |>  
+
+    ) |>
     tidyr::pivot_wider(
       names_from = name,
       values_from = taxon_prop,
       values_fill = numeric(1)
-    ) 
+    ) |> 
+   # sort alphabetically
+   dplyr::select(dplyr::any_of(transferice:::meta), dplyr::any_of(sort(taxa_nms))) 
   
 }
 

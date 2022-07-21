@@ -219,7 +219,7 @@ explo_server <- function(id) {
     # location metadata
     dat <- eventReactive(input$load, {
       # connection and query
-      taxon_prop <- calc_taxon_prop(pool)
+      taxon_prop <- calc_taxon_prop(pool, "train")
 
       # filter latitudes for area selection
       lat_ft <- rep(TRUE, nrow(taxon_prop))
@@ -350,7 +350,7 @@ explo_server <- function(id) {
 
       # bind with location metadata
       dplyr::bind_cols(dat(), NOAA) |> 
-        tidyr::drop_na()  
+        tidyr::drop_na(pm())  
     })
 
     # the odds of finding a taxon at a site
