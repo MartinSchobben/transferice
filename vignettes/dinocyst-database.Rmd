@@ -246,6 +246,18 @@ dino_cnt <- pivot_longer(
 DBI::dbWriteTable(con, "neptune_sample_taxa", dino_cnt, overwrite = TRUE)
 ```
 
+```{r manual, options}
+fossil2 <- dino_brinkhuis |> 
+  rename(set_names(abbr, nm = clean_nms)) |> 
+  rowwise() |> 
+  mutate(tot = sum(c_across(any_of(clean_nms)))) |> 
+  ungroup() |> 
+  mutate(across(any_of(clean_nms), ~.x / tot), hole_id = 90999, age_ma = 0) |> 
+  select(-c(tot, sample_age_ma,source_id, site, hole)) |> 
+  tidyr::drop_na() |> 
+  age_finder()
+```
+
 # taxon list
 
 ```{r taxonlist}
