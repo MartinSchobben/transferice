@@ -1,5 +1,9 @@
 # object can be workflow or parsnip model
-ggpredict <- function(obj, new_data, time_unit = "age") {
+ggpredict <- function(obj, new_data, pm, time_unit = "age") {
+  
+  pm <- stringr::str_split(pm, "_")[[1]]
+  
+  new_data <- tidyr::drop_na(new_data, age_ma)
   
   pred <- predict(obj, new_data = new_data)
   # pred_int <- predict(obj$.workflow[[1]], new_data = new_data, type = "pred_int")
@@ -28,6 +32,6 @@ ggpredict <- function(obj, new_data, time_unit = "age") {
       ggplot2::geom_line() +
       ggplot2::geom_point() +
       ggplot2::scale_x_reverse() +
-      ggplot2::labs(x = xlab, y = oceanexplorer::env_parm_labeller("t")) +
+      ggplot2::labs(x = xlab, y = oceanexplorer::env_parm_labeller(pm)) +
       transferice_theme()
 }

@@ -199,7 +199,7 @@ explo_server <- function(id) {
           ),
           tags$br(),
           helpText(
-            paste0("Select the environmental parameters to train the transfer function.")
+            paste0("Select the environmental parameter to train the transfer function.")
           )
         )
       }

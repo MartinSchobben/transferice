@@ -20,18 +20,61 @@ predict_ui <- function(id) {
       column(
         width = 3,
         wellPanel(
-          uiOutput(ns("std")),
-          uiOutput(ns("rng")),
+          tabsetPanel(
+            id = ns("sl"),
+            tabPanel(
+              "temporal",
+              br(),
+              actionLink(
+                ns("stdhelper"), 
+                "", 
+                icon = icon('question-circle')
+              ),
+              uiOutput(ns("std")),
+              uiOutput(ns("rng"))
+            ),
+            tabPanel(
+              "spatial"
+            ),
+            footer = 
+              tagList(
+                fluidRow(
+                  column(
+                    width = 6,
+                    actionLink(
+                      ns("printhelper"), 
+                      "", 
+                      icon = icon('question-circle')
+                    ),
+                    actionButton(ns("print"), "Print result")
+                  ),
+                  column(
+                    width = 6, 
+                    actionLink(
+                      ns("codehelper"), 
+                      "", 
+                      icon = icon('question-circle')
+                    ),
+                    actionButton(ns("code"), "Expose code")
+                  )
+                ),
+                tags$br(),
+                wellPanel(uiOutput(ns("helptext")))
+              )
+          ),
           style = "height:100%;"
         )
       ),
       column(
+        width = 6,
         plotOutput(ns("pred")),
-        width = 6
+        plotOutput(ns("strat"), height = 100)
       ),
       column(
         width = 3,
         wellPanel(
+          tags$h5("Results"), 
+          tags$hr(),
           div(uiOutput(ns("comp")), style = "text-align: center;"),
           style = "height:100%;"
         )
@@ -47,6 +90,16 @@ predict_server <- function(id, model_id) {
   stopifnot(is.reactive(model_id))
   
   moduleServer(id, function(input, output, session) {
+    
+    # sidebar helptext
+    output$helptext <- renderUI({
+      if (input$sl == "temporal") {
+        helpText(paste0("Predict temporal trends for the selected oceanographic."))
+      } else if (input$sl == "spatial") {
+        helpText(paste0("Predict spatial trends for the selected oceanographic."))
+      }
+    })
+    
   
     # new data for predicting
     new <- reactive({
@@ -65,7 +118,7 @@ predict_server <- function(id, model_id) {
       req(time())
       sliderInput(
         NS(id, "int"), 
-        "Filter range", 
+        "Filter range (My)", 
         round(min(time()$age_ma, na.rm = TRUE), -1),
         round(max(time()$age_ma, na.rm = TRUE), -1),
         round(max(time()$age_ma, na.rm = TRUE), -1),
@@ -80,13 +133,15 @@ predict_server <- function(id, model_id) {
       paste(pm, av, sep = "_")
     })
     
-    # transform to fit format of model
-    fossil <- reactive({
+    # filter dataset
+    filter <- reactive({
       
       req(input$study)
+      
       dt <- new() |> 
         dplyr::filter(.data$source_citation == input$study)
- 
+      
+
       if (stringr::str_detect(model_id(), "genera")) {
 
         # all variables and their roles
@@ -108,40 +163,69 @@ predict_server <- function(id, model_id) {
           recipes::bake(NULL)
         
       }
-
-     
-      # if the recipe has a pca step then reduce dimensions
+      # return
+      dt
+    })
+      
+    # transform to fit format of model
+    trans <- reactive({
       if (stringr::str_detect(model_id(), "pca|pls")) {
-        
-        reduce_taxa(model_id(), dt) 
+        # if the recipe has a pca step then reduce dimensions
+        reduce_taxa(model_id(), filter()) 
       } else {
         # otherwise impute missing taxa
-        impute_taxa(model_id(), dt, pm(), return_type = "impute")
+        impute_taxa(model_id(), filter(), pm(), return_type = "impute")
       }
     })  
     
-    # metadata (notably age or depth)
     time <- reactive({
-      req(fossil())
-      age_finder(fossil()$new_data)
+      # add the age in Myr
+      age_finder(trans()$new_data)
     })
     
-    output$pred <- renderPlot({
-      req(fossil(), time(), input$int)
-
+    p <- reactive({
+      req(trans(), time(), input$int)
+      
       ggpredict(
-        fossil()$model, 
-        time()[time()$age_ma < input$int, , drop = FALSE]
+        trans()$model, 
+        time()[time()$age_ma < input$int, , drop = FALSE],
+        pm()
+      )  |> chrono_bldr()
+    })
+    # plot the predicted trend
+    output$pred <- renderPlot({
+      req(trans(), time(), input$int)
+      p()[[1]]
+      })
+    output$strat <- renderPlot({
+      req(trans(), time(), input$int)
+
+      plot(p()$chrono, bg = 'transparent')
+    })
+    
+    # print how many fossil taxa are present int raining set
+    output$comp <- renderUI({
+
+      req(time(), input$int)
+      
+      # correct for time interval of selection
+      time <- time()[time()$age_ma < input$int, , drop = FALSE]
+      time <- dplyr::select(time, .data$sample_id, .data$age_ma)
+      dt <- dplyr::inner_join(dplyr::select(new(), -.data$age_ma), time, by = "sample_id")
+      
+
+      # remove na rows
+      dt <- tidyr::drop_na(dt)
+      # remove zero columns
+      fn <- function(x) is.numeric(x) && sum(x) != 0
+      dt <- dplyr::select(dt, tidyselect::vars_select_helpers$where(~fn(.x)))
+
+      print_predict(
+        model_id(),
+        dt,
+        pm()
       )
     })
-    
-    # output$comp <- renderUI({
-    #   print_predict(
-    #     final(), 
-    #     fossil()[time()$age_ma < req(input$int), , drop = FALSE], 
-    #     pm()
-    #     )
-    #   })
     
   })
 }

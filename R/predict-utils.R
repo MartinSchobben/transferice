@@ -11,15 +11,15 @@ impute_taxa <- function(
   fit <- readRDS(fs::path_package("transferice", "appdir", "cache", obj, ext = "rds")) 
   
   # get recipe
-  recipe <- workflows::extract_recipe(fit, estimated = TRUE) 
-  number <- recipes::tidy(recipe) |>
-    dplyr::filter(.data$type == "rename") |>
-    dplyr::pull(.data$number)
+  recipe <- workflows::extract_recipe(fit, estimated = FALSE) 
+  
+  # names of taxa of training data
+  train_nm <- summary(recipe) |> 
+    dplyr::filter(.data$role == "predictor" & !.data$variable %in% c("longitude", "latitude")) |> 
+    dplyr::pull(.data$variable)
 
-  # roles
-  train_nm <- recipes::tidy(recipe, number)$value |> 
-    stringr::str_remove_all("\"")
-  new_nm <- role_organizer(new_data, out) 
+  # names of taxa of predicting data
+  new_nm <- role_organizer(new_data, out)   
   new_nm <- new_nm[names(new_nm) == "predictor"] |> unname()
 
   # which ones are existing in training set
@@ -85,10 +85,22 @@ age_finder <- function(new_data) {
   dplyr::mutate(
     new_data, 
     age_ma = NSBcompanion::findAge(nsb, id, depth_mbsf = .data$sample_depth_mbsf)$age_ma
-  )  |> 
-    tidyr::drop_na(age_ma)
+  )  #|> 
+    #tidyr::drop_na(age_ma)
   
 }
 
-
+remove_rare <- function(new_data) {
+  # remove near-zero variance taxa 
+  vars <- role_organizer(new_data, NULL)
+  
+  # taxa
+  txa <- vars[names(vars) == "predictor"] |> unname()
+  
+  # recipe
+  recipes::recipe(x = new_data, vars = vars, roles = names(vars)) |> 
+    recipes::step_nzv(dplyr::any_of(txa)) |> 
+    recipes::prep(training = new_data) |> 
+    recipes::bake(NULL)
+}
 

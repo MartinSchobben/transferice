@@ -6,7 +6,7 @@ dbpath <- fs::path_package(package = "transferice", "extdata",
 con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
 
 # calculate proportional dino counts
-dino_prop <- calc_taxon_prop(con) 
+dino_prop <- calc_taxon_prop(con, "train") 
 
 # environment
 locs <- dplyr::select(dino_prop, longitude, latitude)
@@ -14,16 +14,6 @@ locs <- dplyr::select(dino_prop, longitude, latitude)
 # ------------------------------------------------------------------------------
 # environmental parameters
 # ------------------------------------------------------------------------------
-parms <- c("temperature", "phosphate", "nitrate", "silicate", "oxygen", 
-           "salinity", "density")
-
-
-# meta
-meta <- c("sample_id", "sample_depth_mbsf", "hole_id", "site_hole", 
-           "longitude", "latitude", "source_citation", "age_ma")
-
-# save parameter names
-usethis::use_data(parms, meta, internal = TRUE, overwrite = TRUE)
 
 # get NOAA annually averaged data for parameters on a 1 degree grid 
 dt  <- oceanexplorer::get_NOAA("temperature", 1, "annual")
@@ -36,11 +26,8 @@ parms <- oceanexplorer::filter_NOAA(dt, depth = 30,  coord = pts) |>
   dplyr::select(-.data$depth) |> 
   sf::st_drop_geometry() 
 
-# location informaiton
+# location information
 environ_dat <- dplyr::bind_cols(locs, parms) 
-
-# save data
-# usethis::use_data(environ_dat , overwrite = TRUE)
 
 # ------------------------------------------------------------------------------
 # dinocysts
