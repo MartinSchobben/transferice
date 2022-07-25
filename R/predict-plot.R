@@ -1,7 +1,7 @@
 # object can be workflow or parsnip model
 ggpredict <- function(obj, new_data, pm, time_unit = "age") {
   
-  pm <- stringr::str_split(pm, "_")[[1]]
+  pm <- stringr::str_split(pm, "_")[[1]][1]
   
   new_data <- tidyr::drop_na(new_data, age_ma)
   

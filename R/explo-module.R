@@ -310,7 +310,7 @@ explo_server <- function(id) {
       list(file_name = file_name, side_file_name = side_file_name)
     })
     
-    observe({
+    observeEvent(input$load, {
       
       req(input$explore == "worldmap", file_info())
       
@@ -335,11 +335,10 @@ explo_server <- function(id) {
       ) |> 
         app_caching("png", file_info()$file_name, file$width, file$height)
       
-    }) |> 
-      bindEvent(input$load, environ_dat(), file_info(), ignoreInit = TRUE)
+    }) 
     
     # get environmental variable from sample locations
-    train <- reactive({
+    train <- eventReactive(input$load, {
       # cast location as list before extraction
       pts <- purrr::set_names(as.list(coords()), nm = c("lon", "lat"))
       # extract and cast in data.frame format
@@ -354,7 +353,7 @@ explo_server <- function(id) {
     })
 
     # the odds of finding a taxon at a site
-    taxon_loc <- reactive({
+    taxon_loc <- eventReactive(input$taxa, {
      
       # needs to be rendered first
       req(input$taxa) 
@@ -379,9 +378,9 @@ explo_server <- function(id) {
     })
 
     # reduce dimensions
-    observe({
+    observeEvent({input$load; input$x; input$y}, {
       
-      req(input$explore == "comparison", file_info())
+      req(file_info())
 
       # roles of all variables 
       vars <- role_organizer(train(), pm())
@@ -407,8 +406,7 @@ explo_server <- function(id) {
         component_y = input$y
       ) |> 
         app_caching("png", file_info()$file_name, file$height, file$height)
-    }) |> 
-      bindEvent(input$explore, input$x, input$y, train())
+    }) 
     
     # plot images
     output$pcr <- output$wmap <- renderImage({
@@ -423,9 +421,7 @@ explo_server <- function(id) {
       }
     },
     deleteFile = FALSE
-    ) |> 
-      bindEvent(file$path)
-    
+    ) 
     # plot sidebar bar plot
     output$spc <- renderImage({
       
@@ -442,8 +438,7 @@ explo_server <- function(id) {
       }
     },
     deleteFile = FALSE
-    ) |> 
-      bindEvent(file$side_path)
+    ) 
     
     # render controller based on tuning results
     output$control <- renderUI({
