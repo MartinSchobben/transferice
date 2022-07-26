@@ -189,15 +189,88 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
   
   moduleServer(id, function(input, output, session) {
     
-#-------------------------------------------------------------------------------
-# misc elements
-#-------------------------------------------------------------------------------    
-    
+# misc elements -----------------------------------------------------------
+
     # `reactiveValues` to store image path and dimensions
-    file <- reactiveValues(path = NULL, side_path = NULL, width = NULL, 
-                           height = NULL, side_width = NULL, side_height = NULL)
+    file <- reactiveValues(
+      path = NULL, 
+      side_path = NULL, 
+      width = NULL, 
+      height = NULL, 
+      side_width = NULL, 
+      side_height = NULL
+    )
+    
+    # file metadata
+    file_info <- reactive({
+      
+      # initial split or fitted/tuned data
+      if (input$specs == "engineering") {
+        dat <- splt()
+        type <- "png" # output type of file
+        method <- "prop"
+      } else if (input$specs == "training") {
+        dat <- tun()
+        type <- "mkv" # output type of file
+        method <- "partial_fit"
+      } else if (input$specs == "validation") {
+        dat <- final()
+        type <- "png" # output type of file
+        method <- "global_fit"
+      }
+      
+      # fitted data requires a species name variable selection
+      if (isTruthy(input$dims))  {
+        x <- paste0(req(input$comp), "of", req(input$ncomp))
+        # tuned data requires a dimension variable selection
+      } else {
+        req(input$peek)
+        x <- input$peek
+      }
+      
+      # file metadata
+      if (input$specs != "validation" || !isTruthy(input$diag)) {
+        # main figure
+        viz <- "xy" 
+      } else {
+        viz <- input$diag 
+      }
+      
+      # side figure
+      if (isTruthy(input$dim)) side_viz <- "boxplot" else side_viz <- "histogram"
+      
+      # workflow    
+      wfl_label <- sanitize_workflow(wfl())
+      
+      # file name
+      file_name <- file_namer(type, input$specs, data_id(), 
+                              taxa = input$taxo, method = method,
+                              trans = wfl_label, viz = viz, x = x)
+      
+      # side panel file name
+      side_file_name <- file_namer("png", "training", data_id(), 
+                                   taxa = input$taxo, method = method,
+                                   trans = wfl_label, viz = side_viz, x = x)
+      # file name
+      data_name <- file_namer("rds", input$specs, data_id(),
+                              taxa = input$taxo, method = method, 
+                              trans = wfl_label)
+      
+      # dimensions of main panel plot
+      width <- height <- file$height
+      
+      # dimensions of side panel plot
+      side_width <- side_height <- file$side_width * 0.75
+      
+      # output
+      list(dat = dat, viz = viz, type = type, file_name = file_name, 
+           side_file_name = side_file_name,
+           data_name = data_name, width = width, height = height, 
+           side_width = side_width, side_height = side_height) 
+    })
+    
+    # update to user specifications
     observe({  
-   
       # dynamic plot size
       file$width <- session$clientData[[paste0("output_",id ,"-eng_width")]]
       file$height <- session$clientData[[paste0("output_",id ,"-eng_height")]]
@@ -220,6 +293,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
     })
     
+    # disable and enable button by grey-out
     observeEvent(input$run, {
       # results
       shinyjs::enable(selector = '.nav-tabs a[data-value="training"')
@@ -295,9 +369,8 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       }
     })
     
-#-------------------------------------------------------------------------------
-# Help text
-#-------------------------------------------------------------------------------
+
+# help text ---------------------------------------------------------------
 
     # sidebar helptext
     output$helptext <- renderUI({
@@ -312,7 +385,6 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
                         "probability."))
       }
     })
-      
 
     # help text modals
     observeEvent(input$scalehelper, {
@@ -326,7 +398,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
         )
       )
     }) 
-      
+  
     observeEvent(input$dimshelper, {
       showModal(
         modalDialog(
@@ -389,14 +461,11 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     }) 
     
 
-#-------------------------------------------------------------------------------    
-# modelling
-#------------------------------------------------------------------------------- 
-    
+# data --------------------------------------------------------------------
+
+    # load data and make initial preparations (species or genera)
     dat <- reactive({
       
-      # for now data is from a local source but later-on it should be sourced 
-      # from the explo-module
       dt <- readRDS(fs::path_package("transferice", "appdir", "cache", 
                                      data_id(), ext = "rds")) 
       
@@ -442,7 +511,8 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       }
     })
 
-    
+# modelling ---------------------------------------------------------------
+
     # re-sample
     splt <- reactive({
       set.seed(1)
@@ -569,83 +639,12 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
         app_caching("rds", model_id())
     })
 
-#-------------------------------------------------------------------------------
-# generate figures
-#-------------------------------------------------------------------------------
 
-    # feature engineering, training and validation viz
-    file_info <- reactive({
-      
-      # initial split or fitted/tuned data
-      if (input$specs == "engineering") {
-        dat <- splt()
-        type <- "png" # output type of file
-        method <- "prop"
-      } else if (input$specs == "training") {
-        dat <- tun()
-        type <- "mkv" # output type of file
-        method <- "partial_fit"
-      } else if (input$specs == "validation") {
-        dat <- final()
-        type <- "png" # output type of file
-        method <- "global_fit"
-      }
-      
-      # fitted data requires a species name variable selection
-      if (isTruthy(input$dims))  {
-        x <- paste0(req(input$comp), "of", req(input$ncomp))
-      # tuned data requires a dimension variable selection
-      } else {
-        req(input$peek)
-        x <- input$peek
-      }
-
-      # file metadata
-      if (input$specs != "validation" || !isTruthy(input$diag)) {
-        # main figure
-        viz <- "xy" 
-      } else {
-        viz <- input$diag 
-      }
-      
-      # side figure
-      if (isTruthy(input$dim)) side_viz <- "boxplot" else side_viz <- "histogram"
-      
-      # workflow    
-      wfl_label <- sanitize_workflow(wfl())
-      
-      # file name
-      file_name <- file_namer(type, input$specs, data_id(), 
-                              taxa = input$taxo, method = method,
-                              trans = wfl_label, viz = viz, x = x)
-      
-      # side panel file name
-      side_file_name <- file_namer("png", "training", data_id(), 
-                                   taxa = input$taxo, method = method,
-                                   trans = wfl_label, viz = side_viz, x = x)
-      # file name
-      data_name <- file_namer("rds", input$specs, data_id(),
-                              taxa = input$taxo, method = method, 
-                              trans = wfl_label)
-      
-      # dimensions of main panel plot
-      width <- height <- file$height
-      
-      # dimensions of side panel plot
-      side_width <- side_height <- file$side_width * 0.75
-   
-      # output
-      list(dat = dat, viz = viz, type = type, file_name = file_name, 
-           side_file_name = side_file_name,
-           data_name = data_name, width = width, height = height, 
-           side_width = side_width, side_height = side_height) 
-    })
+# figures -----------------------------------------------------------------
     
-    # create plot or animation (save in `reactiveValues`)
+    # create plot or animation (save in `reactiveValues`) for the main panel
     observe({
    
-      req(file_info())
-
       # predictor
       if (isTruthy(input$dims)) {
         req(input$comp)
@@ -670,11 +669,44 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
                     file_info()$height)
 
     })
-
+    
+    # plot the sub-model metrics as a boxplot or histogram for the side panel
+    observe({
+      
+      # predictor
+      if (isTruthy(input$dims)) {
+        req(input$comp)
+        pred <- input$comp
+        num_comp <- input$ncomp
+      } else {
+        req(input$peek)
+        pred <- input$peek
+        num_comp <- NULL
+      }
+      
+      # only show in the training module
+      if (req(input$results) == "training") {
+        file$side_path <- ggperformance(
+          obj = req(tun()), 
+          pred = pred, 
+          tune = num_comp
+        ) |> 
+          app_caching(
+            "png", 
+            req(file_info()$side_file_name), 
+            req(file_info()$side_width),
+            req(file_info()$side_height)
+          )
+      }
+    })
+    
     # cross plots and validation plots
     output$eng <- output$final <- renderImage({
      
-      if (file_checker(req(file_info()$file_name), req(file$path))) {
+      # only when file info is known
+      req(file_info()$file_name, file$path)
+      
+      if (file_checker(file_info()$file_name, file$path)) {
         list(
           height = file$height, 
           width = file$height, 
@@ -684,12 +716,16 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       }
     },
     deleteFile = FALSE
-    )
+    ) |>
+      bindEvent(file$path)
     
     # CV animations
     output$part  <- renderUI({
       
-      if (file_checker(req(file_info()$file_name), req(file$path))) {
+      # only when file info is known
+      req(file_info()$file_name, file$path)
+      
+      if (file_checker(file_info()$file_name, file$path)) {
         tags$video(
           height = file$height, 
           width = file$height, 
@@ -699,53 +735,29 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
           loop = TRUE
         )
       }
-    })
+    }) |>
+      bindEvent(file$path)
     
-    # render controller for predictor selection in plot output
-    output$control <- renderUI({
-
-      if (input$specs != "validation") {
-        
-        if (!isTruthy(input$dims)) {
-          
-          # species names
-          spec_nms <- taxa_naming(wfl()) 
-          spec_nms <- rlang::set_names(
-            paste0("taxa_", seq_along(spec_nms)), 
-            spec_nms
-          )
-          
-          selectInput(
-            NS(id, "peek"), 
-            "Taxa selection",
-            choices = spec_nms,
-            selected = isolate(input$peek)
-          )
-          
-        } else if (input$dims == "pca") {
-        
-          selectInput(
-            NS(id, "comp"), 
-            "Principal component", 
-            choices = paste0("PC", 1:req(input$ncomp))
-          )
-          
-        }
-        
-      } else {
-        
-        selectInput(
-          NS(id, "diag"), 
-          "Diagnostic",
-          choices = c("R-squared" = "xy", "spatial" = "bubble")
+    # sub-model plot
+    output$submodel <- renderImage({
+      
+      # only when file info is known
+      req(file_info()$side_file_name, file$side_path)
+      
+      if (file_checker(file_info()$side_file_name, file$side_path)) {
+        list(
+          height = file$side_width * 0.75, 
+          width = file$side_width * 0.75, 
+          src = file$side_path, 
+          contentType = 'image/png'
         )
-        
       }
-    }) 
+    },
+    deleteFile = FALSE
+    ) |>
+      bindEvent(file$side_path)
     
-#-------------------------------------------------------------------------------
-# side panel    
-#-------------------------------------------------------------------------------    
+# side panel ---------------------------------------------------------------
 
     # side panel (sub) model metrics
     output$results <- renderText({
@@ -785,48 +797,6 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       )
     })
 
-    # plot the submodel metrics as a boxplot
-    observe({
-      
-      # predictor
-      if (isTruthy(input$dims)) {
-        req(input$comp)
-        pred <- input$comp
-      } else {
-        req(input$peek)
-        pred <- input$peek
-      }
-
-      # only show in the training module
-      if (req(input$results) == "training") {
-        file$side_path <- ggperformance(
-          obj = req(tun()), 
-          pred = pred, 
-          tune = input$ncomp
-        ) |> 
-          app_caching(
-            "png", 
-            req(file_info()$side_file_name), 
-            req(file_info()$side_width),
-            req(file_info()$side_height)
-          )
-      }
-    })
-    
-    # plot
-    output$submodel <- renderImage({
-      if (file_checker(req(file_info()$side_file_name), req(file$side_path))) {
-        list(
-          height = file$side_width * 0.75, 
-          width = file$side_width * 0.75, 
-          src = file$side_path, 
-          contentType = 'image/png'
-        )
-      }
-    },
-    deleteFile = FALSE
-    )
-    
     # and print a text
     output$submetrics <- renderUI({
       print_model(obj = tun(), workflow = wfl())
@@ -834,11 +804,60 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
 
     # final model metric as text in side panel
     output$finmetrics <- renderUI({print_model(final())})
-    
+
+# controllers -------------------------------------------------------------
+
+    # render controller for predictor selection in plot output
+    output$control <- renderUI({
+      
+      if (input$specs != "validation") {
+        
+        if (!isTruthy(input$dims)) {
+          
+          # species names
+          spec_nms <- taxa_naming(wfl()) 
+          spec_nms <- rlang::set_names(
+            paste0("taxa_", seq_along(spec_nms)), 
+            spec_nms
+          )
+          
+          selectInput(
+            NS(id, "peek"), 
+            "Taxa selection",
+            choices = spec_nms,
+            selected = isolate(input$peek)
+          )
+          
+        } else if (input$dims == "pca") {
+          
+          selectInput(
+            NS(id, "comp"), 
+            "Principal component", 
+            choices = paste0("PC", 1:req(input$ncomp))
+          )
+          
+        }
+        
+      } else {
+        
+        selectInput(
+          NS(id, "diag"), 
+          "Diagnostic",
+          choices = c("R-squared" = "xy", "spatial" = "bubble")
+        )
+        
+      }
+    }) 
+
+# return ------------------------------------------------------------------
+
     # return model workflow
     model_id
   })
 }
+
+
+# helpers -----------------------------------------------------------------
 
 # detailed information for engineering section
 info_eng <- function(...) {
@@ -871,10 +890,4 @@ info_train <- function(...) {
       )
     )
   )
-}
-
-
-file_checker <- function(name, file) {
-  if(!isTruthy(name)) return(FALSE)
-  fs::path_ext_remove(basename(file)) == name
 }

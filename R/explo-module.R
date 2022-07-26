@@ -167,7 +167,10 @@ explo_ui <- function(id) {
 explo_server <- function(id) {
 
   moduleServer(id, function(input, output, session) {
-    
+ 
+
+# misc elements -----------------------------------------------------------
+
     # sidebar helptext
     output$helptext <- renderUI({
       if (input$select == "biota") {
@@ -206,8 +209,16 @@ explo_server <- function(id) {
     })
     
     # `reactiveValues` to store image path and dimensions
-    file <- reactiveValues(path = NULL, side_path = NULL, width = NULL, 
-                           height = NULL, side_width = NULL, side_height = NULL)
+    file <- reactiveValues(
+      path = NULL, 
+      side_path = NULL, 
+      width = NULL, 
+      height = NULL,
+      side_width = NULL, 
+      side_height = NULL
+    )
+    
+    # update to user specifications
     observe({ 
       # dynamic plot size
       file$width <- session$clientData[[paste0("output_", id ,"-wmap_width")]]
@@ -215,21 +226,9 @@ explo_server <- function(id) {
       file$side_width <- session$clientData[[paste0("output_", id ,"-spc_width")]]
       file$side_height <- session$clientData[[paste0("output_", id ,"-spc_height")]]
     })
-
-    # location metadata
-    dat <- eventReactive(input$load, {
-      # connection and query
-      taxon_prop <- calc_taxon_prop(pool, "train")
-
-      # filter latitudes for area selection
-      lat_ft <- rep(TRUE, nrow(taxon_prop))
-      if (input$area == "3031") lat_ft <- taxon_prop$latitude <= 0
-      if (input$area == "3995") lat_ft <- taxon_prop$latitude >= 0
-      taxon_prop[lat_ft, , drop = FALSE]
-    })
     
     # common id
-    tag <- reactive({ 
+    tag <- eventReactive(input$load, { 
       paste(
         input$group,
         input$parm,
@@ -241,7 +240,7 @@ explo_server <- function(id) {
     })
     
     # selected variable
-    pm <- reactive({
+    pm <- eventReactive(input$load, {
       paste(
         input$parm, # variable
         input$temp, # temporal averaging
@@ -249,35 +248,20 @@ explo_server <- function(id) {
       )
     })
     
-    # get all environmental data from NOAA for the specific averaging period
-    environ_dat <- eventReactive(input$load, {
-      
-      # waiter (this can take a bit longer)
-      waiter <- waiter::Waiter$new()
-      waiter$show()
-      on.exit(waiter$hide())
-      # parameter
-      pm <- parms[abbreviate_vars(parms) == input$parm]
-      # averaging period
-      av <- names(temp)[temp == input$temp]
-      # get the oceanographic data
-      oceanexplorer::get_NOAA(pm, 1, av) 
-    })
-    
-    # get unique locations as longitude/latitude dataframe
-    coords <- eventReactive(input$load, {
-      dplyr::select(dat(), .data$longitude, .data$latitude)
+    # data label
+    nm <- eventReactive(input$save, {
+      file_namer("rds", "raw", tag())
     })
     
     # file metadata
     file_info <- reactive({
-      
+
       # taxa names
       tx <- dplyr::select(dat(), -dplyr::any_of(meta)) |> 
         dplyr::select(where(~sum(.x) > 0)) |> 
         colnames()
       
-        # file name for sidebar
+      # file name for sidebar
       if (isTruthy(input$taxa)) {
         side_file_name <- file_namer("png", "raw", tag(), viz = "barplot", 
                                      x = paste0("taxa_", which(tx %in% input$taxa)))
@@ -305,40 +289,47 @@ explo_server <- function(id) {
       
       # file name
       file_name <- file_namer("png", "raw", tag(), viz = viz, x = x)
-
+      
       # return
       list(file_name = file_name, side_file_name = side_file_name)
     })
-    
-    observeEvent(input$load, {
-      
-      req(input$explore == "worldmap", file_info())
-      
-      if(!isTruthy(input$taxa)) {
-        # coordinates of sample locations
-        pts <- sf::st_as_sf(coords(), coords =  c("longitude", "latitude"), 
-                            crs = 4326)
-      } else {
-        # highlighted coordinates
-        pts <- sf::st_as_sf(taxon_loc(), coords =  c("longitude", "latitude"), 
-                            crs = 4326)
-      }
 
-      # filter beforehand for better contrasts
-      NOAA <- oceanexplorer::filter_NOAA(environ_dat(), input$depth)
-      # add sample locations
-      file$path <- oceanexplorer::plot_NOAA(
-        NOAA = NOAA, 
-        depth = NULL,
-        points = pts, 
-        epsg = input$area
-      ) |> 
-        app_caching("png", file_info()$file_name, file$width, file$height)
+# data --------------------------------------------------------------------
+
+    # taxa proportion
+    dat <- eventReactive(input$load, {
+      # connection and query
+      taxon_prop <- calc_taxon_prop(pool, "train")
+
+      # filter latitudes for area selection
+      lat_ft <- rep(TRUE, nrow(taxon_prop))
+      if (input$area == "3031") lat_ft <- taxon_prop$latitude <= 0
+      if (input$area == "3995") lat_ft <- taxon_prop$latitude >= 0
+      taxon_prop[lat_ft, , drop = FALSE]
+    })
+
+    # get all environmental data from NOAA for the specific averaging period
+    environ_dat <- eventReactive(input$load, {
       
-    }) 
+      # waiter (this can take a bit longer)
+      waiter <- waiter::Waiter$new()
+      waiter$show()
+      on.exit(waiter$hide())
+      # parameter
+      pm <- parms[abbreviate_vars(parms) == input$parm]
+      # averaging period
+      av <- names(temp)[temp == input$temp]
+      # get the oceanographic data
+      oceanexplorer::get_NOAA(pm, 1, av) 
+    })
     
-    # get environmental variable from sample locations
-    train <- eventReactive(input$load, {
+    # get unique locations as longitude/latitude `dataframe`
+    coords <- reactive({
+      dplyr::select(dat(), .data$longitude, .data$latitude)
+    })
+    
+    # get environmental variable from sample locations (the final dataset)
+    train <- reactive({
       # cast location as list before extraction
       pts <- purrr::set_names(as.list(coords()), nm = c("lon", "lat"))
       # extract and cast in data.frame format
@@ -346,15 +337,15 @@ explo_server <- function(id) {
         dplyr::select(-.data$depth) |> 
         # drop geometry as we will use it for sub-setting only
         sf::st_drop_geometry() 
-
+      
       # bind with location metadata
       dplyr::bind_cols(dat(), NOAA) |> 
         tidyr::drop_na(pm())  
     })
-
-    # the odds of finding a taxon at a site
-    taxon_loc <- eventReactive(input$taxa, {
-     
+    
+    # odds of finding a taxon at a site
+    taxon_loc <- reactive({
+      
       # needs to be rendered first
       req(input$taxa) 
       # filter the dataset
@@ -368,19 +359,8 @@ explo_server <- function(id) {
         dplyr::filter(.data$rank >= dplyr::n() - 20) 
     })
     
-    # plot taxon
-    observe({
-
-      req(taxon_loc()) 
-      file$side_path <- ggtaxon(taxon_loc(), "odds", "site_hole") |> 
-        app_caching("png", file_info()$side_file_name, file$side_width, 
-                    file$side_width)
-    })
-
-    # reduce dimensions
-    observeEvent({input$load; input$x; input$y}, {
-      
-      req(file_info())
+    # prepare data for PCA
+    trans <- reactive({       
 
       # roles of all variables 
       vars <- role_organizer(train(), pm())
@@ -390,28 +370,86 @@ explo_server <- function(id) {
       
       # variables not used in transform
       terms <- vars[names(vars) != "predictor"] |> unname()
-
+      
       # re-scale (logit from recipes)
-      taxon_prep <- recipes::recipe(x = train(), vars = vars, roles = names(vars)) |>
+      dt <- recipes::recipe(x = train(), vars = vars, roles = names(vars)) |>
         recipes::step_logit(dplyr::any_of(txa) , offset = 0.025) |>
-        recipes::prep() |>
+        recipes::prep(training = train()) |>
         recipes::bake(new_data = NULL)
+      
+      # return
+      list(dt = dt, terms = terms)
+      })
+    
+    # save data
+    observeEvent(input$save, {
+      app_caching(train(), "rds", nm())
+    })
 
-      # perform a pcr
-      file$path <- ggcompare(
-        taxon_prep,
-        var = pm(),
-        id = terms,
-        component_x = input$x,
-        component_y = input$y
-      ) |> 
-        app_caching("png", file_info()$file_name, file$height, file$height)
+# figures -----------------------------------------------------------------
+
+    # oceanographic world-map
+    observe({
+      
+      if (req(input$explore) == "worldmap") {
+      
+        if(!isTruthy(input$taxa)) {
+          # coordinates of sample locations
+          pts <- sf::st_as_sf(coords(), coords =  c("longitude", "latitude"), 
+                              crs = 4326)
+        } else {
+          # highlighted coordinates
+          pts <- sf::st_as_sf(taxon_loc(), coords =  c("longitude", "latitude"), 
+                              crs = 4326)
+        }
+  
+        # filter beforehand for better contrasts
+        NOAA <- oceanexplorer::filter_NOAA(environ_dat(), input$depth)
+        # add sample locations
+        file$path <- oceanexplorer::plot_NOAA(
+          NOAA = NOAA, 
+          depth = NULL,
+          points = pts, 
+          epsg = input$area
+        ) |> 
+          app_caching("png", file_info()$file_name, file$width, file$height)
+      }
     }) 
     
-    # plot images
+    # reduce dimensions with a PCA analysis
+    observe({
+
+      req(input$x, input$y)
+
+      if (req(input$explore) == "comparison") {
+
+        # perform a pcr
+        file$path <- ggcompare(
+          trans()$dt,
+          var = pm(),
+          id = trans()$terms,
+          component_x = input$x,
+          component_y = input$y
+        ) |> 
+          app_caching("png", file_info()$file_name, file$height, file$height)
+      }
+    }) 
+    
+    # plot taxon as odds per site
+    observeEvent(input$taxa, {
+      req(taxon_loc())
+      file$side_path <- ggtaxon(taxon_loc(), "odds", "site_hole") |>
+        app_caching("png", file_info()$side_file_name, file$side_width,
+                    file$side_width)
+    })
+    
+    # plot main panel images
     output$pcr <- output$wmap <- renderImage({
+
+      # only when file info is known
+      req(file_info()$file_name, file$path)
       
-      if (file_checker(req(file_info()$file_name), req(file$path))) {
+      if (file_checker(file_info()$file_name, file$path)) {
         list(
           height = file$height, 
           width = if (input$explore == "worldmap") file$width else file$height, 
@@ -421,14 +459,16 @@ explo_server <- function(id) {
       }
     },
     deleteFile = FALSE
-    ) 
+    ) |> 
+      bindEvent(file$path)
+    
     # plot sidebar bar plot
     output$spc <- renderImage({
       
-      # only when taxa is selected
-      req(input$taxa)
+      # only when taxa is selected and file info is known
+      req(file_info()$file_name, file$path)
       
-      if (file_checker(req(file_info()$side_file_name), req(file$side_path))) {
+      if (file_checker(file_info()$side_file_name, file$side_path)) {
         list(
           height = file$side_width, 
           width = file$side_width, 
@@ -438,8 +478,11 @@ explo_server <- function(id) {
       }
     },
     deleteFile = FALSE
-    ) 
-    
+    ) |>
+      bindEvent(file$side_path)
+
+# controllers -------------------------------------------------------------
+
     # render controller based on tuning results
     output$control <- renderUI({
 
@@ -459,21 +502,13 @@ explo_server <- function(id) {
       )
     })
     
-    # data label
-    nm <- eventReactive(input$save, {
-      file_namer("rds", "raw", tag())
-    })
+# return ------------------------------------------------------------------
     
-    # save data
-    observeEvent(input$save, {
-      app_caching(train(), "rds", nm())
-    })
-
-    # return
     nm
   })
 }
 
+# helpers -----------------------------------------------------------------
 
 # averaging
 temp <- c("annual", month.name, "winter", "spring", "summer", "autumn")

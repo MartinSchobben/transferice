@@ -225,5 +225,9 @@ clean_cache <- function(module = "training", type = "all") {
     }
   }
   
-  
+}
+
+# check if file has been produced
+file_checker <- function(name, file) {
+  fs::path_ext_remove(basename(file)) == name
 }
