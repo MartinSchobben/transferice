@@ -80,9 +80,9 @@ tuned_workflow <- tune::tune_grid(
   modern_workflow,
   resamples = modern_cv,
   grid = tune_grid,
-  metrics = yardstick::metric_set(yardstick::rmse)
+  metrics = yardstick::metric_set(yardstick::rmse),
+  control = ctrl
 )
-
 
 # select model with 4 PCs
 final_workflow <- tune::finalize_workflow(
@@ -103,6 +103,6 @@ meta <- c("sample_id", "sample_depth_mbsf", "hole_id", "site_hole",
           "longitude", "latitude", "source_citation", "age_ma")
 
 # internal data
-use_data(tuned_recipe, modern_workflow, tuned_workflow, final_workflow, 
+use_data(tuned_recipe, modern_split, modern_workflow, tuned_workflow, final_workflow, 
          validation_modern, final_fit, parms, meta, internal = TRUE, 
          overwrite = TRUE)

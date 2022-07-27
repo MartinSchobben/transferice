@@ -1,13 +1,9 @@
 test_that("recipe step works", {
   
-  rcp <- recipes::recipe(
-    x = dinodat,
-    vars = c("p_an", "88", "longitude", "latitude"),
-    roles = c("outcome", "predictor", "spatial", "spatial")
-  ) |> 
+  rcp <- transferice_recipe(modern, "t_an") |> 
     step_zerogeodist(lon = longitude, lat = latitude) |> 
-    prep(training = dinodat) |> 
-    bake(NULL)   
+    recipes::prep(training = modern) |> 
+    recipes::bake(NULL)   
   
   expect_equal(nrow(rcp), 2360)
   

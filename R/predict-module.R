@@ -67,7 +67,7 @@ predict_ui <- function(id) {
       ),
       column(
         width = 6,
-        plotOutput(ns("pred")),
+        shinycssloaders::withSpinner(plotOutput(ns("pred"))),
         plotOutput(ns("strat"), height = 100)
       ),
       column(
@@ -199,8 +199,8 @@ predict_server <- function(id, model_id) {
       })
     output$strat <- renderPlot({
       req(trans(), time(), input$int)
+      gridExtra::grid.arrange(p()$chrono)
 
-      plot(p()$chrono, bg = 'transparent')
     })
     
     # print how many fossil taxa are present int raining set

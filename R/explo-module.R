@@ -12,9 +12,6 @@ explo_ui <- function(id) {
   
   tagList(
     
-    # waiter
-    waiter::use_waiter(),
-    
     # Application title
     titlePanel("Data Selection"),
     
@@ -121,10 +118,10 @@ explo_ui <- function(id) {
         width = 6, 
         tabsetPanel(
           id = ns("explore"),
-          tabPanel("worldmap", plotOutput(ns("wmap"))),
+          tabPanel("worldmap", shinycssloaders::withSpinner(plotOutput(ns("wmap")))),
           tabPanel(
             "comparison", 
-            div(plotOutput(ns("pcr")), style = "text-align: center;"),
+            div(shinycssloaders::withSpinner(plotOutput(ns("pcr"))), style = "text-align: center;"),
             fluidRow(
               column(
                 width = 4,

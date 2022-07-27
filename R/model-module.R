@@ -15,9 +15,6 @@ model_ui <- function(id) {
     # use shinyjs
     shinyjs::useShinyjs(), 
 
-    # waiter
-    waiter::use_waiter(),
-    
     # Application title
     titlePanel("Training Transfer Functions"),
 
@@ -121,15 +118,15 @@ model_ui <- function(id) {
             id = ns("specs"),
             tabPanel(
               "engineering",
-              div(plotOutput(ns("eng")), style = "text-align: center;")
+              div(shinycssloaders::withSpinner(plotOutput(ns("eng"))), style = "text-align: center;")
             ),
             tabPanel(
               "training",
-              div(uiOutput(ns("part")), style = "text-align: center;")
+              div(shinycssloaders::withSpinner(uiOutput(ns("part"))), style = "text-align: center;") 
             ),
             tabPanel(
               "validation",
-              div(plotOutput(ns("final")), style = "text-align: center;")
+              div(shinycssloaders::withSpinner(plotOutput(ns("final"))), style = "text-align: center;")
             ),
             header = tagList(
               tags$br(),
@@ -307,7 +304,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
       if (isTruthy(input$spat)) shinyjs::disable("spat")
     })
     
-    observeEvent(input$reset, {
+    observeEvent({input$reset ; data_id()}, {
       # results
       shinyjs::disable(selector = '.nav-tabs a[data-value="training"')
       shinyjs::disable(selector = '.nav-tabs a[data-value="validation"')
@@ -324,7 +321,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     })
     
     # reset model settings
-    observeEvent(input$reset, {
+    observeEvent({input$reset ; data_id()}, {
       updateSelectizeInput(
         session, 
         "scale",
@@ -466,8 +463,16 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     # load data and make initial preparations (species or genera)
     dat <- reactive({
       
-      dt <- readRDS(fs::path_package("transferice", "appdir", "cache", 
-                                     data_id(), ext = "rds")) 
+      pt <- try(
+        fs::path_package("transferice", "appdir", "cache", data_id(), ext = "rds"),
+        silent = TRUE
+      ) 
+      
+      # check if file exists
+      req(pt)
+      
+      # get data
+      dt <- readRDS(pt)
       
       if (input$taxo == "genera") {
 
@@ -501,7 +506,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
           # remove the very rare taxa
           recipes::step_nzv(dplyr::any_of(txa)) |> 
           # prep the data
-          recipes::prep(train = dt) |> 
+          recipes::prep(training = dt) |> 
           recipes::bake(NULL)
         
       } else {
@@ -582,11 +587,6 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     # tuning
     tun <- eventReactive(input$run, {
       
-      # waiter
-      waiter <- waiter::Waiter$new()
-      waiter$show()
-      on.exit(waiter$hide())
-      
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
       nm <- file_namer("rds", "training", data_id(), taxa = input$taxo, 
@@ -613,7 +613,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     })
     
     # model name
-    model_id <- eventReactive({input$run | input$ncomp}, {
+    model_id <- eventReactive(input$save, {
       # name for caching
       wfl_nm <- sanitize_workflow(wfl()) # workflow name
       # add tune element
@@ -644,7 +644,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
     
     # create plot or animation (save in `reactiveValues`) for the main panel
     observe({
-   
+      
       # predictor
       if (isTruthy(input$dims)) {
         req(input$comp)
