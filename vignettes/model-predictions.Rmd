@@ -64,17 +64,11 @@ gls_spec <- linear_reg() |>
   set_engine(
     "gls",  
     control = nlme::lmeControl(opt = 'optim'),
-<<<<<<< HEAD
     correlation = nlme::corSpatial(
       form = ~longitude|latitude, 
       type = "g", 
       nugget = TRUE
     )
-||||||| 14664f7
-    correlation = nlme::corSpatial(form = ~longitude|latitude, type = "g" )
-=======
-    correlation = nlme::corSpatial(form = ~longitude|latitude, type = "g" , nugget = TRUE)
->>>>>>> 95bb8510a65f000c8d808eab1ef2950ee27de7d2
   )  |> 
   # usage of the model for regression
   set_mode('regression')
@@ -157,46 +151,16 @@ final_fit <- fit(gls_wfl, data = modern)
 # variables
 vars <- role_organizer(fossil2, NULL)
 # taxa
-<<<<<<< HEAD
 txa <- vars[names(vars) == "predictor"] |> unname()
-||||||| 14664f7
-txa <- vars[names(vars) == "predictor"]
-# new names
-new <- paste0("taxa_", seq_along(txa))
-=======
-txa <- vars[names(vars) == "predictor"] |> unname()
-# new names
-# new <- paste0("taxa_", seq_along(txa))
->>>>>>> 95bb8510a65f000c8d808eab1ef2950ee27de7d2
 
 # recipe
-<<<<<<< HEAD
 rcp <- recipe(x = fossil2, vars = vars, roles = names(vars)) |> 
-||||||| 14664f7
-rcp <- recipe(x = fossil_dinodat, vars = vars, roles = names(vars)) |> 
-  # rename taxa
-  step_rename(!!!rlang::set_names(txa, new)) |> 
-=======
-rcp <- recipe(x = fossil_dinodat, vars = vars, roles = names(vars)) |> 
-  # rename taxa
-  # step_rename(!!!rlang::set_names(txa, new)) |> 
->>>>>>> 95bb8510a65f000c8d808eab1ef2950ee27de7d2
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
   step_center(dplyr::any_of(txa)) |> 
   # reduce dimensions (with 4 dims)
-<<<<<<< HEAD
   step_pca(dplyr::any_of(txa), num_comp = 4) 
-||||||| 14664f7
-  step_pca(dplyr::any_of(new), num_comp = 4) |> 
-  # update spatial to predictor
-  update_role(longitude, latitude, new_role = "predictor")
-=======
-  step_pca(dplyr::any_of(txa), num_comp = 4) |> 
-  # update spatial to predictor
-  update_role(longitude, latitude, new_role = "predictor")
->>>>>>> 95bb8510a65f000c8d808eab1ef2950ee27de7d2
 
 # extract model
 final_mdl <- final_fit |> extract_fit_parsnip()
