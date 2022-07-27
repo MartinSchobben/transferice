@@ -41,30 +41,46 @@ server <- function(input, output, session) {
   
   thematic::thematic_shiny(bg = "transparent", fg = "black")
   
-  file <- reactiveValues(data = NULL, model = NULL, n = 2)
-  observe({
-    file$data <- fs::path_package("transferice", "appdir", "cache", 
-                                  data_id(), ext = "rds")
-    file$model <- fs::path_package("transferice", "appdir", "cache", 
-                                   model_id(), ext = "rds")
-    if (file_checker(model_id(), file$model)) {
-      file$n <- 4 
-    } else if (file_checker(data_id(), file$data)) {
-      file$n <- 3
+  # counter
+  num <- reactive({
+    # browser()
+    
+    dt <- try(
+      fs::path_package("transferice", "appdir", "cache", data_id(), ext = "rds"),
+      silent = TRUE
+    )
+    mdl <- try(
+      fs::path_package("transferice", "appdir", "cache", model_id(), ext = "rds"),
+      silent = TRUE
+    )
+    
+    # initial 
+    n <- 2
+    # browser()
+    
+    if (!inherits(dt, "try-error")) {
+      n <- 3
     }
+    if (all(!inherits(dt, "try-error"), !inherits(mdl, "try-error"))) {
+      n <- 4
+    }
+    # return
+    n
+   
   })
   
   # wizard
-  observe(wizard_server("wizard", file$n))
+  observe({wizard_server("wizard", num())})
   
   # data selection
-  data_id <- explo_server("explo")
-  # observe(message(glue::glue("{data_id()}")))
+  data_id <-  explo_server("explo")
+  
   # model training
-  model_id <- model_server("model", data_id)
+  model_id  <- model_server("model", data_id)
+  
   # prediction
   predict_server("predict", model_id)
-  # observe(message(glue::glue("{model_id()}")))
+
 }
 
 shinyApp(ui, server)

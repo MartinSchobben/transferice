@@ -7,8 +7,17 @@ impute_taxa <- function(
     exclude = meta
   ) {
   
+  # path
+  pt <- try(
+    fs::path_package("transferice", "appdir", "cache", obj, ext = "rds"),
+    silent = TRUE
+  )
+  
+  # check if file exists
+  req(pt)
+  
   # get model
-  fit <- readRDS(fs::path_package("transferice", "appdir", "cache", obj, ext = "rds")) 
+  fit <- readRDS(pt) 
   
   # get recipe
   recipe <- workflows::extract_recipe(fit, estimated = FALSE) 
@@ -51,8 +60,17 @@ impute_taxa <- function(
 # prep taxa with different composition to PCA
 reduce_taxa <- function(obj, new_data) {
   
+  # path
+  pt <- try(
+    fs::path_package("transferice", "appdir", "cache", obj, ext = "rds"),
+    silent = TRUE
+  )
+  
+  # check if file exists
+  req(pt)
+  
   # get model
-  fit <- readRDS(fs::path_package("transferice", "appdir", "cache", obj, ext = "rds")) 
+  fit <- readRDS(pt) 
 
   # make a new recipe
   recipe <- transferice_recipe(
