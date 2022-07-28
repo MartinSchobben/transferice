@@ -39,6 +39,17 @@ devtools:
 devtools::install_github("UtrechtUniversity/transferice")
 ```
 
+## Shiny app
+
+Run the app as follows:
+
+``` r
+# load package
+library(transferice)
+# run app
+transferice_app()
+```
+
 ## Funding
 
 This project was funded by ERC Starting grant number 802835, OceaNice,

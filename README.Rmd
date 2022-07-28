@@ -74,6 +74,17 @@ You can install the development version of transferice from GitHub with devtools
 devtools::install_github("UtrechtUniversity/transferice")
 ```
 
+## Shiny app
+
+Run the app as follows:
+
+```{r app, eval=FALSE}
+# load package
+library(transferice)
+# run app
+transferice_app()
+```
+
 ## Funding
 
 This project was funded by ERC Starting grant number 802835, OceaNice, awarded to Peter Bijl.
