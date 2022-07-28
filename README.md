@@ -23,9 +23,8 @@ interface to provide a visual representation of the machine learning
 pipeline.
 
 <figure>
-<video src="man/figures/transferice-demo.ogv" style="width:95.0%"
-controls=""><a href="man/figures/transferice-demo.ogv">Demo of the ocean
-explorer</a></video>
+<img src="man/figures/transferice-demo.gif" style="width:95.0%"
+alt="Demo of the ocean explorer" />
 <figcaption aria-hidden="true">Demo of the ocean explorer</figcaption>
 </figure>
 
