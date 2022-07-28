@@ -8,6 +8,9 @@ predict_ui(id)
 }
 \arguments{
 \item{id}{namespace}
+
+\item{model_id}{reactive value containing a character string for the selected
+model.}
 }
 \description{
 Shiny predict module

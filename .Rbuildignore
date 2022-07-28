@@ -11,3 +11,5 @@
 ^inst/appdir$
 ^inst/www$
 ^inst/extdata$
+^codecov\.yml$
+^man/transferice-demo\.ogv$

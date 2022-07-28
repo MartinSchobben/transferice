@@ -1,4 +1,5 @@
 test_that("file naming conventions work", {
+  
   # snaps
   expect_snapshot(
     file_namer("rds", "raw", "dinocyst_t_an_global")
@@ -48,7 +49,7 @@ test_that("method for saving are selected", {
   con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
   
   # count data
-  prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con)
+  prop <- calc_taxon_prop(con)
   
   # file name
   nm <- file_namer("rds", "raw", "dinocyst", trans = "prop")
@@ -65,15 +66,30 @@ test_that("method for saving are selected", {
     method_selector(nm, type = "rds")
   )
   
+  # delete file
+  fs::file_delete(fs::path(pkg, "appdir", "cache", nm, ext = "rds"))
+  
+  # filter the dataset
+  taxon_loc <- dplyr::distinct(prop, .data$sample_id, .keep_all = TRUE) |> 
+    dplyr::mutate(
+      # odds  
+      odds = .data[["Amiculosphaera umbracula"]] / (1 - .data[["Amiculosphaera umbracula"]]),
+      # find highest n ranks
+      rank = rank(.data$odds)
+    ) |> 
+    dplyr::filter(.data$rank >= dplyr::n() - 20) |> 
+    tidyr::drop_na(-age_ma)
+  
   # plot
-  p <- taxon_plot(prop, "22", "sample_id")
+  p <- ggtaxon(taxon_loc, "Amiculosphaera umbracula", "site_hole")
   
   # file name
-  nm <- file_namer("png", "prep", "dinocyst", trans = "raw", viz = "xy", 
-                   y = "odds", x = "locations")
+  nm <- file_namer("png", "raw", "dinocyst", trans = "raw", viz = "xy", 
+                   x = "locations")
   
   # save file
   method_selector(nm, p, "png", width = 250, height = 250)
+  
   expect_true(
     fs::file_exists(fs::path(pkg, "www", "img", nm, ext = "png"))
   )
@@ -83,6 +99,9 @@ test_that("method for saving are selected", {
     method_selector(nm, type = "png"),
     fs::path(pkg, "www", "img", nm, ext = "png")
   )
+  
+  # delete file
+  fs::file_delete(fs::path(pkg, "www", "img", nm, ext = "png"))
   
   # close connection
   on.exit(DBI::dbDisconnect(con))
@@ -103,7 +122,7 @@ test_that("caching works", {
   nm <- file_namer("rds", "raw", "dinocyst", trans = "prop")
   
   # count data
-  prop <- calc_taxon_prop("neptune_sample_taxa", "neptune_sample", con) |> 
+  prop <- calc_taxon_prop(con) |> 
     app_caching("rds", nm)
   
   expect_true(
@@ -115,23 +134,30 @@ test_that("caching works", {
     method_selector(nm, type = "rds")
   )
   
-  # names lsit
-  prop <- species_naming(con, parms, ) |> 
-    app_caching("rds", nm)
+  nm <- file_namer("png", "raw", "dinocyst_annual_global", viz ="xy", x = "22")
   
-  expect_true(
-    fs::file_exists(fs::path(pkg, "appdir", "cache", nm, ext = "rds"))
-  )
+  # filter the dataset
+  taxon_loc <- dplyr::distinct(prop, .data$sample_id, .keep_all = TRUE) |> 
+    dplyr::mutate(
+      # odds  
+      odds = .data[["Amiculosphaera umbracula"]] / (1 - .data[["Amiculosphaera umbracula"]]),
+      # find highest n ranks
+      rank = rank(.data$odds)
+    ) |> 
+    dplyr::filter(.data$rank >= dplyr::n() - 20) |> 
+    tidyr::drop_na(-age_ma)
   
-  # load file
-  expect_snapshot(
-    method_selector(nm, type = "rds")
-  )
-  
-  nm <- file_namer("png", "raw", "dinocyst_annual_global", viz ="xy", y = "count", x = "22")
-  
-  p <- taxon_plot(prop, "22", "sample_id") |> 
+  # plot
+  p <- ggtaxon(taxon_loc, "Amiculosphaera umbracula", "site_hole")|> 
     app_caching("png", nm, width = 400, height =400)
+  
+  # check file exists
+  expect_true(
+    fs::file_exists(fs::path(pkg, "www", "img", nm, ext = "png"))
+  )
+  
+  # delete file
+  fs::file_delete(fs::path(pkg, "www", "img", nm, ext = "png"))
   
   on.exit(DBI::dbDisconnect(con))
 })

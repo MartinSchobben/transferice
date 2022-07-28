@@ -2,9 +2,18 @@ Package: transferice
 Title: Reconstructing the Past with Fossils.
 Version: 0.0.0.9000
 Authors@R: 
-    person("Martin", "Schobben", , "schobbenmartin@gmail.com", role = c("aut", "cre"),
-           comment = c(ORCID = "0000-0001-8560-0037"))
-Description: This package enables a visual implementation of constructing machine learning based transfer functions, which can be used to reconstruct past oceanographic conditions.
+    person(
+      "Martin", 
+      "Schobben", 
+      ,
+      "schobbenmartin@gmail.com", 
+      role = c("aut", "cre"),
+      comment = c(ORCID = "0000-0001-8560-0037")
+    )
+Description: 
+    This package enables a visual implementation of constructing machine 
+    learning based transfer functions which can be used to reconstruct past 
+    oceanographic conditions.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -17,7 +26,6 @@ Imports:
     fs (>= 1.5.2),
     gganimate (>= 1.0.7),
     ggplot2 (>= 3.3.5),
-    gstat (>= 2.0.8),
     multilevelmod (>= 0.2.0),
     nlme (>= 3.1.157),
     oceanexplorer (>= 0.0.0.9002),
@@ -47,12 +55,19 @@ Suggests:
     roxygen2,
     testthat (>= 3.0.0),
     vdiffr,
-    thematic (>= 0.1.2.1)
+    thematic (>= 0.1.2.1),
+    diffviewer,
+    covr
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Depends: 
-    R (>= 4.10)
+    R (>= 4.1.0)
 StagedInstall: no
 LazyData: true
-Remotes: 
+Remotes:  
+    UtrechtUniversity,
     UtrechtUniversity
+SystemRequirements: 
+  FFmpeg (>= 3.2); with at least libx264 and lame (mp3) drivers. Debian/Ubuntu: 
+  libavfilter-dev, Fedora/CentOS: ffmpeg-devel (via https://rpmfusion.org), 
+  MacOS Homebrew: ffmpeg. C++11

@@ -57,7 +57,7 @@ ggpartial.mc_split <- function(
   # split object for training recipe
   prep <- recipes::prep(recipe, training = rsample::training(obj))  
   # apply to training data
-  cast <-  recipes::bake(prep, new_data = NULL) 
+  cast <- recipes::bake(prep, new_data = NULL) 
 
   # recipe details (is it tuned or not?)
   recipe_specs <- sanitize_workflow(workflow, model = FALSE)
@@ -196,6 +196,7 @@ ggpartial.last_fit <- function(
     dplyr::bind_cols(test)
   
   if (type == "xy") {
+    
     # title
     ttl_reg <- paste0("R-squared Plot (", parsed_pm, ")")
       
@@ -205,12 +206,12 @@ ggpartial.last_fit <- function(
     ) +  
       ggplot2::geom_point(alpha = 0.3) +  
       ggplot2::geom_abline(color = 'blue', linetype = 2) +
-      # ggplot2::coord_fixed() +
       ggplot2::labs(
         title = ttl_reg,       
         y = 'Predicted',        
         x = 'Actual'
       )
+    
   } else if (type == "bubble") {
     
     # title
@@ -240,9 +241,16 @@ ggpartial.last_fit <- function(
         x = "Longitude", y = "Latitude", title = ttl_bub
       ) +
       ggplot2::scale_size_continuous(breaks = c(lw, 0, up), range = c(1, 10)) +
-      ggplot2::scale_fill_distiller(direction = -1, palette="RdYlBu",  breaks = c(lw, 0, up)) +
+      ggplot2::scale_fill_distiller(
+        direction = -1, 
+        palette = "RdYlBu",  
+        breaks = c(lw, 0, up)
+      ) +
       # merge scales
-      ggplot2::guides(fill = ggplot2::guide_legend(), size = ggplot2::guide_legend()) 
+      ggplot2::guides(
+        fill = ggplot2::guide_legend(), 
+        size = ggplot2::guide_legend()
+      ) 
   }
   
   # add theme

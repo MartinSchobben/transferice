@@ -6,7 +6,6 @@
 .httr-oauth
 .Renviron
 .DS_Store
-
 # derived filetypes
 /**/*.gif
 /**/*.png
@@ -21,6 +20,6 @@
 /**/*.html
 /**/*.svg
 /**/*.mkv
-
 # documentation
 inst/doc
+gif-creator.sh

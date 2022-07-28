@@ -24,6 +24,7 @@ print_model.mc_split <- function(
   
   var_info <- rcp$var_info |> 
     dplyr::filter(.data$role == "outcome") 
+  
   # number of outcome
   nout <- nrow(var_info)
   
@@ -121,7 +122,7 @@ print_model.last_fit  <- function(
   
 }
 
-
+# compare tuned sub-models
 ggperformance <- function(obj, pred = NULL, tune = NULL) {
   
   # predictor variable
@@ -165,6 +166,5 @@ ggperformance <- function(obj, pred = NULL, tune = NULL) {
   }
   
   p + transferice_theme()
-
 
 } 

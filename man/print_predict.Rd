@@ -5,7 +5,17 @@
 \title{print HTML model setup
 Model print}
 \usage{
-print_predict(obj, new_data, out, ...)
+print_predict(obj, new_data, out)
+}
+\arguments{
+\item{obj}{Character string identifying the finalized workflow.}
+
+\item{new_data}{The dataframe used for the prediction.}
+
+\item{out}{The parameter of interest.}
+}
+\value{
+HTML text
 }
 \description{
 print HTML model setup

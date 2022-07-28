@@ -8,16 +8,29 @@ test_that("multiplication works", {
   con <- DBI::dbConnect(drv = RSQLite::SQLite(),  dbname = dbpath)
   
   # taxon
-  taxon <- calc_taxon_prop(con)
+  taxon <- calc_taxon_prop(con, "train")
   
-  ggtaxon(taxon, "Brigantedinium spp.", "sample_id")
+  # filter the dataset
+  taxon_loc <- dplyr::distinct( taxon, .data$sample_id, .keep_all = TRUE) |> 
+    dplyr::mutate(
+      # odds  
+      odds = .data[["Xandarodinium xanthum"]] / (1 - .data[["Xandarodinium xanthum"]]),
+      # find highest n ranks
+      rank = rank(.data$odds)
+    ) |> 
+    dplyr::filter(.data$rank >= dplyr::n() - 20) |> 
+    tidyr::drop_na(-age_ma)
+  
+  # plot
+  vdiffr::expect_doppelganger(
+    "taxon plot", 
+    ggtaxon(taxon_loc, "Xandarodinium xanthum", "site_hole")
+  )
+  
+  on.exit(DBI::dbDisconnect(con))  
 })
 
 test_that("dimensions ca be reduced", {
-  
-  skip_on_cran()
-  skip_on_ci()
-  skip_on_covr()
   
   # dinos
   dbpath <- fs::path_package(package = "transferice", "extdata", 
@@ -46,14 +59,13 @@ test_that("dimensions ca be reduced", {
   pts <- setNames(as.list(crd), nm = c("lon", "lat"))
   pts <- oceanexplorer::filter_NOAA(environ, depth = 30, coord = pts)
   # drop geometry as we will use it for ...
-  parm <- sf::st_drop_geometry(pts) |> select(-depth)
-  train <- dplyr::bind_cols(dino_prop, parm)
+  parm <- sf::st_drop_geometry(pts) |> dplyr::select(-depth)
+  train <- dplyr::bind_cols(dino_prop, parm) |> tidyr::drop_na(-age_ma)
   
-  meta <- c("sample_id", "hole_id", "sample_depth_mbsf", "site_hole", "source_citation", "longitude", "latitude")
   # apply function and compare to reference plot
   vdiffr::expect_doppelganger(
     "pca plot of taxon overlain with environmental parameter",
-    reduce_dims(train, var = "t_an", id = meta, loc = "hole_id")
+    ggcompare(train, var = "t_an", id = meta)
   )
   on.exit(DBI::dbDisconnect(con))  
 })
