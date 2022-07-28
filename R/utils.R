@@ -126,10 +126,9 @@ abbreviate_vars <- function(x, type = "parms") {
   x
 }
 
-
-#' Title
+#' Connect to the database
 #'
-#' @return
+#' @return Connection object
 #' @export
 get_pool <- function() {  
   # path to db
@@ -137,7 +136,6 @@ get_pool <- function() {
   # pool connections
   pool::dbPool(drv = RSQLite::SQLite(),  dbname = dbpath)
 }
-
 
 # sanitize taxa names for file names
 sanitize_taxa <- function(nm) {

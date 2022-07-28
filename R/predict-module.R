@@ -91,6 +91,9 @@ predict_server <- function(id, model_id) {
   
   moduleServer(id, function(input, output, session) {
     
+
+# help text ---------------------------------------------------------------
+
     # sidebar helptext
     output$helptext <- renderUI({
       if (input$sl == "temporal") {
@@ -100,10 +103,11 @@ predict_server <- function(id, model_id) {
       }
     })
     
-  
+
+# data --------------------------------------------------------------------
+
     # new data for predicting
     new <- reactive({
-
       calc_taxon_prop(pool, "predict") |> tidyr::drop_na(-age_ma)
     })
     
@@ -192,6 +196,7 @@ predict_server <- function(id, model_id) {
         pm()
       )  |> chrono_bldr()
     })
+    
     # plot the predicted trend
     output$pred <- renderPlot({
       req(trans(), time(), input$int)

@@ -4,9 +4,9 @@
 \name{transferice-package}
 \alias{transferice}
 \alias{transferice-package}
-\title{transferice: Reconstructing the Past with Fossil Assemblages.}
+\title{transferice: Reconstructing the Past with Fossils.}
 \description{
-What the package does (one paragraph).
+This package enables a visual implementation of constructing machine learning based transfer functions which can be used to reconstruct past oceanographic conditions.
 }
 \author{
 \strong{Maintainer}: Martin Schobben \email{schobbenmartin@gmail.com} (\href{https://orcid.org/0000-0001-8560-0037}{ORCID})

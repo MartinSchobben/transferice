@@ -13,7 +13,7 @@ explo_server(id)
 \item{id}{Namespace id.}
 }
 \value{
-Shiny module
+Shiny module.
 }
 \description{
 Shiny exploration module

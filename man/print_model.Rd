@@ -17,8 +17,7 @@ print_model(obj, ...)
   tune = NULL,
   out = NULL,
   spat = NULL,
-  exclude = c("sample_id", "hole_id", "longitude", "latitude", "sample_depth_mbsf",
-    "site_hole", "source_citation")
+  exclude = meta
 )
 
 \method{print_model}{tune_results}(obj, workflow, pred = NULL, tune = NULL, out = NULL)

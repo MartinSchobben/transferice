@@ -104,5 +104,5 @@ meta <- c("sample_id", "sample_depth_mbsf", "hole_id", "site_hole",
 
 # internal data
 use_data(tuned_recipe, modern_split, modern_workflow, tuned_workflow, final_workflow, 
-         validation_modern, final_fit, parms, meta, internal = TRUE, 
+         validation_modern, final_fit, parms, meta, txa, internal = TRUE, 
          overwrite = TRUE)

@@ -1,7 +1,9 @@
 ---
 output: github_document
+bibliography: "vignettes/packages.bib"
 ---
 
+<a href="https://utrechtuniversity.github.io/transferice/"><img src="man/figures/oceanice-logo.jpg" align="right" height="56" /></a>
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 ```{r, include = FALSE}
@@ -13,15 +15,54 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{r pkgs, echo=FALSE, message=FALSE, eval=FALSE}
+# following code for loading and writing the bibtex references for the used pkgs
+pkgs <- c("dplyr", "tibble", "stringr", "ggplot2", "rlang", "purrr", "devtools", 
+          "roxygen2", "testthat", "knitr", "rmarkdown", "stars", "sf", 
+          "thematic", "bslib", "shiny", "shinyWidgets", "shinycssloaders",
+          "shinyjs")  
+# Get the R reference
+rref <- citation()
+# Create ref key
+rref$key <- "rversion"
+hadley1 <- bibentry(
+  key = "Wickham2015",
+  bibtype = "Book",
+  title = "R packages: organize, test, document, and share your code",
+  author =  person("Hadley","Wickham"),
+  year = "2015",
+  publisher = " O'Reilly Media, Inc.",
+  url = "https://r-pkgs.org/"
+)
+hadley2 <- bibentry(
+  key = "Wickham2020",
+  bibtype = "Book",
+  title = "Mastering Shiny: Build Interactive Apps, Reports & Dashboards.",
+  author =  person("Hadley","Wickham"),
+  year = "2020",
+  publisher = " O'Reilly Media, Inc.",
+  url = "https://mastering-shiny.org/"
+)
+knitr::write_bib(pkgs, "vignettes/packages.bib", prefix = "")
+pkgs <- bibtex::read.bib("vignettes/packages.bib")
+bibtex::write.bib(
+  purrr::reduce(list(rref, hadley1, hadley2, pkgs), append), 
+  file = "vignettes/packages.bib"
+)
+```
+
 # transferice
 
 <!-- badges: start -->
 [![Project Status: Concept – Minimal or no implementation has been done yet, or the repository is only intended to be a limited example, demo, or proof-of-concept.](https://www.repostatus.org/badges/latest/concept.svg)](https://www.repostatus.org/#concept)
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/)
 [![Last-changedate](https://img.shields.io/badge/last%20change-`r gsub('-', '--', Sys.Date())`-yellowgreen.svg)](/commits/master)
+[![Codecov test coverage](https://codecov.io/gh/UtrechtUniversity/transferice/branch/master/graph/badge.svg)](https://app.codecov.io/gh/UtrechtUniversity/transferice?branch=master)
 <!-- badges: end -->
 
-The goal of transferice is to reconstruct sea ice dynamics with dinocyst assemblages.
+The goal of transferice is to reconstruct past oceanographic conditions using fossils. All steps of data selection, model construction, and final predictions are implemented in a `shiny`[@shiny] interface to provide a visual representation of the machine learning pipeline. 
+
+![Demo of the ocean explorer](man/figures/transferice-demo.ogv){width=95%}
 
 ## Installation
 
@@ -33,3 +74,16 @@ You can install the development version of transferice from GitHub with devtools
 devtools::install_github("UtrechtUniversity/transferice")
 ```
 
+## Funding
+
+This project was funded by ERC Starting grant number 802835, OceaNice, awarded to Peter Bijl.
+
+## Credits
+
+The construction of the R [@rversion] package *transferice* and associated documentation was aided by the packages; *devtools* [@devtools], *roxygen2* [@roxygen2], *testthat* [@testthat], *knitr* [@knitr2014 ; @knitr2015], *rmarkdown* [@rmarkdown2018; @rmarkdown2020], and the superb guidance in the book: *R packages: organize, test, document, and share your code*, by @Wickham2015. 
+
+Data transformation, cleaning and visualization is performed with: *dplyr* [@dplyr], *tibble* [@tibble], *stringr* [@stringr], and *rlang* [@rlang].
+
+The app is build with *shiny* [@shiny] and the guidance in the book: *Mastering Shiny: Build Interactive Apps, Reports & Dashboards* [@Wickham2020] was a great help in learning how to develop such applications. Furthermore, the packages *shinyjs* [@shinyjs], *shinyWidgets* [@shinyWidgets],  *shinycssloaders* [@shinycssloaders], *bslib* [@bslib] and *thematic* [@thematic] ensure user friendliness and visually pleasing graphics.
+
+## References

@@ -8,16 +8,5 @@ RUN wget "https://www.sqlite.org/2022/sqlite-autoconf-3370200.tar.gz" \
   && make \
   && make install
   
-# imagemagick
-# apt-get install build-essential
-RUN wget "https://www.imagemagick.org/download/ImageMagick.tar.gz" \
-  && tar xvzf ImageMagick.tar.gz --directory /opt\
-  && cd /opt/ImageMagick-7.1.0-27 \
-  && ./configure \
-  && make \
-  && make install \
-  && ldconfig /usr/local/lib # runtime binding
-  
 # av renderer
-  
 apt install libavfilter-dev

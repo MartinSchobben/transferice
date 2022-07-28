@@ -4,7 +4,7 @@
 #' @param graph ggplot object
 #' @param reverse logical whether the time axis was already reversed
 #' @param capture_legend logical indicating whether the legend should be
-#' returned
+#'  returned
 #' @param tectonic logical indicating whether tectonic event plot is required
 #'
 #' @return A list with ggplot, gtable and grob elements
