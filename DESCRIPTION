@@ -65,7 +65,7 @@ Depends:
 StagedInstall: no
 LazyData: true
 Remotes:  
-    UtrechtUniversity
+    UtrechtUniversity/oceanexplorer
 SystemRequirements: 
   FFmpeg (>= 3.2); with at least libx264 and lame (mp3) drivers. Debian/Ubuntu: 
   libavfilter-dev, Fedora/CentOS: ffmpeg-devel (via https://rpmfusion.org), 

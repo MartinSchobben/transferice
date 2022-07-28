@@ -60,9 +60,9 @@ bibtex::write.bib(
 [![Codecov test coverage](https://codecov.io/gh/UtrechtUniversity/transferice/branch/master/graph/badge.svg)](https://app.codecov.io/gh/UtrechtUniversity/transferice?branch=master)
 <!-- badges: end -->
 
-The goal of transferice is to reconstruct past oceanographic conditions using fossils. All steps of data selection, model construction, and final predictions are implemented in a `shiny`[@shiny] interface to provide a visual representation of the machine learning pipeline. 
+The goal of transferice is to reconstruct past oceanographic conditions using fossils. All steps of data selection, model construction, and final predictions are implemented in a *shiny* [@shiny] interface to provide a visual representation of the machine learning pipeline. 
 
-![Demo of the ocean explorer](man/figures/transferice-demo.gif){width=95%}
+![Demo of the transferice app](man/figures/transferice-demo.gif){width=95%}
 
 ## Installation
 

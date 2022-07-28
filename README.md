@@ -18,14 +18,14 @@ coverage](https://codecov.io/gh/UtrechtUniversity/transferice/branch/master/grap
 
 The goal of transferice is to reconstruct past oceanographic conditions
 using fossils. All steps of data selection, model construction, and
-final predictions are implemented in a `shiny`(Chang et al. 2021)
+final predictions are implemented in a *shiny* (Chang et al. 2021)
 interface to provide a visual representation of the machine learning
 pipeline.
 
 <figure>
 <img src="man/figures/transferice-demo.gif" style="width:95.0%"
-alt="Demo of the ocean explorer" />
-<figcaption aria-hidden="true">Demo of the ocean explorer</figcaption>
+alt="Demo of the transferice app" />
+<figcaption aria-hidden="true">Demo of the transferice app</figcaption>
 </figure>
 
 ## Installation
