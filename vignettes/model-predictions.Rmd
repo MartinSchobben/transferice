@@ -66,7 +66,7 @@ gls_spec <- linear_reg() |>
     control = nlme::lmeControl(opt = 'optim'),
     correlation = nlme::corSpatial(
       form = ~longitude|latitude, 
-      type = "g", 
+      type = "e", 
       nugget = TRUE
     )
   )  |> 
@@ -138,7 +138,7 @@ final <- tune::last_fit(gls_wfl, split = modern_split, metrics = mts)
 ```
 
 ```{r check}
-ggpartial(final, gls_wfl, pred = "taxa_2", out = "t_an", type = "bubble")
+ggpartial(final, gls_wfl, out = "t_an", type = "bubble")
 ```
 
 # Predictions
@@ -149,12 +149,12 @@ final_fit <- fit(gls_wfl, data = modern)
 
 # new recipe
 # variables
-vars <- role_organizer(fossil2, NULL)
+vars <- role_organizer(fossil, NULL)
 # taxa
 txa <- vars[names(vars) == "predictor"] |> unname()
 
 # recipe
-rcp <- recipe(x = fossil2, vars = vars, roles = names(vars)) |> 
+rcp <- recipe(x = fossil, vars = vars, roles = names(vars)) |> 
   # rescale predictor
   step_log(dplyr::any_of(txa), offset = 0.025) |> 
   # center predictors
@@ -163,17 +163,18 @@ rcp <- recipe(x = fossil2, vars = vars, roles = names(vars)) |>
   step_pca(dplyr::any_of(txa), num_comp = 4) 
 
 # extract model
-final_mdl <- final_fit |> extract_fit_parsnip()
+final_mdl <- final_fit |> 
+  extract_fit_parsnip()
 
 # bake fossil data
-fossil_prepped <- prep(rcp, training = fossil2) |> 
+fossil_prepped <- prep(rcp, training = fossil) |> 
     bake(new_data = NULL)
 
 # predict on new data
 pred <- predict(final_mdl, new_data = fossil_prepped)
 
 # add to original data
-fossil_pred <- bind_cols(fossil2, pred)
+fossil_pred <- bind_cols(fossil, pred)
 
 # timeplot
 ggplot(fossil_pred, aes(x = age_ma, y = .pred)) +
