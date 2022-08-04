@@ -15,7 +15,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 
+          
+      - name: Install libnetcdf
         run: apt-get install -y libnetcdf-dev
 
       - uses: r-lib/actions/setup-pandoc@v1
