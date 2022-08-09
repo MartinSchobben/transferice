@@ -8,8 +8,8 @@
 ^data-raw$
 ^DOCKERFILE$
 ^app\.R$
-^inst/appdir$
-^inst/www$
-^inst/extdata$
+^inst/appdir
+^inst/www
+^inst/extdata
 ^codecov\.yml$
 ^man/transferice-demo\.ogv$

@@ -19,23 +19,19 @@ locs <- dplyr::select(dino_prop, longitude, latitude)
 dt  <- oceanexplorer::get_NOAA("temperature", 1, "annual")
 
 # cast location as list before extraction
-pts <- setNames(as.list(locs), nm = c("lon", "lat"))
+pts <- purrr::set_names(as.list(locs), nm = c("lon", "lat"))
 
 # get locations parameters
 parms <- oceanexplorer::filter_NOAA(dt, depth = 30,  coord = pts) |> 
   dplyr::select(-.data$depth) |> 
   sf::st_drop_geometry() 
 
-# location information
-environ_dat <- dplyr::bind_cols(locs, parms) 
-
 # ------------------------------------------------------------------------------
 # dinocysts
 # ------------------------------------------------------------------------------
 # combine
-modern <- tibble::add_column(dino_prop, t_an = environ_dat$t_an) |> 
-  # remove NAs
-  tidyr::drop_na(-age_ma) 
+modern <- dplyr::bind_cols(dino_prop, parms) |> 
+  tidyr::drop_na("t_an")  
 
 # save data
 usethis::use_data(modern, overwrite = TRUE)
@@ -43,7 +39,8 @@ usethis::use_data(modern, overwrite = TRUE)
 # fossil
 fossil <- calc_taxon_prop(con, "predict")   
   
-fossil <- age_finder(tidyr::drop_na(fossil, -age_ma))
+fossil <- age_finder(tidyr::drop_na(fossil, -age_ma)) |> 
+  tidyr::drop_na(age_ma)
 
 # save data
 usethis::use_data(fossil, overwrite = TRUE)

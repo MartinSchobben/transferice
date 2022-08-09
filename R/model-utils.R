@@ -1,3 +1,17 @@
+#' Title
+#'
+#' @param dat 
+#' @param outcome 
+#' @param group 
+#' @param temporal 
+#' @param spatial 
+#' @param meta 
+#' @param aliases 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 role_organizer <- function(
     dat, 
     outcome, 
@@ -30,6 +44,19 @@ role_organizer <- function(
 # parms = oceanographic parameters
 # averaging = averaging period
 # remove = variables not used in regression
+
+#' Title
+#'
+#' @param dat 
+#' @param outcome 
+#' @param type 
+#' @param aliases 
+#' @param exclude 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 formula_parser <- function(
     dat,
     outcome, 

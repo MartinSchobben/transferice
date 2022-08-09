@@ -2,10 +2,13 @@
 % Please edit documentation in R/utils.R
 \name{get_pool}
 \alias{get_pool}
-\title{Title}
+\title{Connect to the database}
 \usage{
 get_pool()
 }
+\value{
+Connection object
+}
 \description{
-Title
+Connect to the database
 }

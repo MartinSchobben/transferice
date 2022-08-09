@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-# library(transferice)
+library(transferice)
 ```
 
 # Data resampling and feature engineering
@@ -66,7 +66,7 @@ gls_spec <- linear_reg() |>
     control = nlme::lmeControl(opt = 'optim'),
     correlation = nlme::corSpatial(
       form = ~longitude|latitude, 
-      type = "e", 
+      type = "g", 
       nugget = TRUE
     )
   )  |> 
@@ -97,10 +97,16 @@ modern_cv <- vfold_cv(
   strata = "latitude"
 )
 
+# setting model tuning parameters
+dls <- gls_wfl |> 
+  dials::parameters() |> 
+  # set PCA steps to 6 components total
+  update(num_comp = dials::num_comp(c(1, 6)))
+    
 # tuning grid
 tune_grid <- dials::grid_regular(
-  tune::extract_parameter_set_dials(gls_wfl), 
-  levels = 4
+  dls, 
+  levels = 6
 )
 
 # tuning

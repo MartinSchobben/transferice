@@ -302,6 +302,7 @@ explo_server <- function(id) {
       lat_ft <- rep(TRUE, nrow(taxon_prop))
       if (input$area == "3031") lat_ft <- taxon_prop$latitude <= 0
       if (input$area == "3995") lat_ft <- taxon_prop$latitude >= 0
+     
       taxon_prop[lat_ft, , drop = FALSE]
     })
 
@@ -334,7 +335,7 @@ explo_server <- function(id) {
         dplyr::select(-.data$depth) |> 
         # drop geometry as we will use it for sub-setting only
         sf::st_drop_geometry() 
-      
+     
       # bind with location metadata
       dplyr::bind_cols(dat(), NOAA) |> 
         tidyr::drop_na(pm())  
