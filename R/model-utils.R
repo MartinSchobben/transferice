@@ -144,8 +144,14 @@ transferice_tuning <- function(split, wfl) {
     
   } else {
 
+    # setting model tuning parameters
+    dls <- wfl |> 
+      dials::parameters() |> 
+      # set PCA steps to 6 components total
+      update(num_comp = dials::num_comp(c(1, 6)))
+    
     # tune grid
-    tune_grid <- dials::grid_regular(tune::extract_parameter_set_dials(wfl), levels = 4)
+    tune_grid <- dials::grid_regular(dls, levels = 6)
     
     # tuning
     out <- tune::tune_grid(

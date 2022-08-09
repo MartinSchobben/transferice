@@ -346,7 +346,7 @@ model_server <- function(id, data_id) { # `data_id` is based on query in explo-m
           NS(id, "ncomp"), 
           "Number of components", 
           min = 1, 
-          max = 4, 
+          max = 6, 
           value = 1, 
           ticks = FALSE
         )
